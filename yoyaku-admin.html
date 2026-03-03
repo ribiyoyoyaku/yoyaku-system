@@ -1117,7 +1117,9 @@ function renderTable() {
   let data = [...reservations];
   if (currentFilter !== 'all') data = data.filter(r => r.status === currentFilter);
   if (searchQuery) data = data.filter(r => r.name.includes(searchQuery));
-  data.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time)*-1);
+
+  // 予約日（昇順）→ 予約時間（昇順）でソート
+  data.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
 
   if (data.length === 0) {
     document.getElementById('tbody').innerHTML =
@@ -1125,28 +1127,62 @@ function renderTable() {
     return;
   }
 
-  document.getElementById('tbody').innerHTML = data.map(r => `
-    <tr style="cursor:pointer" onclick="openModal(${r.id})">
-      <td>
-        <div style="font-family:'DM Mono',monospace;font-size:.82rem">${formatDate(r.date)}</div>
-        <div style="font-size:.75rem;color:var(--muted)">${r.time}〜</div>
-      </td>
-      <td>
-        <div class="customer-name">${r.name}${r.firstVisit?' <span style="font-size:.65rem;color:var(--yellow)">初</span>':''}</div>
-        <div class="customer-tel">${r.tel}</div>
-      </td>
-      <td><span class="menu-tag">${r.menu}</span></td>
-      <td style="color:var(--muted);font-size:.82rem">${r.staff}</td>
-      <td><span class="status-badge ${statusCls[r.status]}"><span class="status-dot"></span>${statusLabel[r.status]}</span></td>
-      <td>
-        <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-          ${r.status==='new'    ?`<button class="action-btn confirm"    onclick="changeStatus(${r.id},'confirmed')">確認済に</button>`:''}
-          ${r.status==='confirmed'?`<button class="action-btn confirm"  onclick="changeStatus(${r.id},'done')">完了</button>`:''}
-          ${r.status!=='cancel'&&r.status!=='done'?`<button class="action-btn cancel-btn" onclick="changeStatus(${r.id},'cancel')">ｷｬﾝｾﾙ</button>`:''}
-        </div>
-      </td>
-    </tr>
-  `).join('');
+  let html = '';
+  let prevDate = null;
+
+  data.forEach(r => {
+    // 日付が変わるたびに区切りヘッダー行を挿入
+    if (r.date !== prevDate) {
+      if (prevDate !== null) {
+        // 2日目以降は上に余白を作るスペーサー行
+        html += `<tr class="date-spacer"><td colspan="6" style="padding:0;height:10px;background:var(--bg)"></td></tr>`;
+      }
+      html += `
+        <tr class="date-group-header">
+          <td colspan="6" style="
+            padding: 8px 20px 6px;
+            background: var(--panel2);
+            border-bottom: 1px solid var(--border);
+            font-size: .75rem;
+            font-weight: 700;
+            color: var(--accent2);
+            letter-spacing: .06em;
+          ">${formatDateFull(r.date)}</td>
+        </tr>`;
+      prevDate = r.date;
+    }
+
+    html += `
+      <tr style="cursor:pointer" onclick="openModal(${r.id})">
+        <td>
+          <div style="font-family:'DM Mono',monospace;font-size:.86rem;font-weight:600">${r.time}〜</div>
+        </td>
+        <td>
+          <div class="customer-name">${r.name}${r.firstVisit?' <span style="font-size:.65rem;color:var(--yellow)">初</span>':''}</div>
+          <div class="customer-tel">${r.tel}</div>
+        </td>
+        <td><span class="menu-tag">${r.menu}</span></td>
+        <td style="color:var(--muted);font-size:.82rem">${r.staff}</td>
+        <td><span class="status-badge ${statusCls[r.status]}"><span class="status-dot"></span>${statusLabel[r.status]}</span></td>
+        <td>
+          <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+            ${r.status==='new'       ? `<button class="action-btn confirm"    onclick="changeStatus(${r.id},'confirmed')">確認済に</button>` : ''}
+            ${r.status==='confirmed' ? `<button class="action-btn confirm"    onclick="changeStatus(${r.id},'done')">完了</button>` : ''}
+            ${r.status!=='cancel'&&r.status!=='done' ? `<button class="action-btn cancel-btn" onclick="changeStatus(${r.id},'cancel')">ｷｬﾝｾﾙ</button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+  });
+
+  document.getElementById('tbody').innerHTML = html;
+}
+
+// 日付区切りヘッダー用（曜日・今日/明日ラベル付きフル表示）
+function formatDateFull(str) {
+  const d    = new Date(str + 'T00:00:00');
+  const diff = Math.round((d - new Date(todayStr + 'T00:00:00')) / 86400000);
+  const tag  = diff === 0 ? ' 🟢 今日' : diff === 1 ? ' 明日' : diff === -1 ? ' 昨日' : '';
+  return `${d.getFullYear()}年 ${d.getMonth()+1}月${d.getDate()}日（${weekDays[d.getDay()]}）${tag}`;
 }
 
 function formatDate(str) {
