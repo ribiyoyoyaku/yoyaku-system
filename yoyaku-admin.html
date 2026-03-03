@@ -996,7 +996,9 @@ function renderTable() {
   let data = [...reservations];
   if (currentFilter !== 'all') data = data.filter(r => r.status === currentFilter);
   if (searchQuery) data = data.filter(r => r.name.includes(searchQuery));
-  data.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time)*-1);
+
+  // 予約日（昇順）→ 予約時間（昇順）でソート
+  data.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
 
   if (data.length === 0) {
     document.getElementById('tbody').innerHTML =
@@ -1004,11 +1006,27 @@ function renderTable() {
     return;
   }
 
-  document.getElementById('tbody').innerHTML = data.map(r => `
+  // 予約日ごとにグループ化して間をあける
+  let html = '';
+  let prevDate = null;
+  data.forEach(r => {
+    // 日付が変わったら区切り行を挿入
+    if (prevDate !== null && prevDate !== r.date) {
+      html += `<tr><td colspan="6" style="padding:6px 0;background:transparent;border:none"></td></tr>`;
+    }
+    // 日付グループの最初の行には日付ラベル行を追加
+    if (prevDate !== r.date) {
+      html += `<tr>
+        <td colspan="6" style="padding:6px 12px 4px;background:var(--bg);border:none;font-size:.75rem;font-weight:700;color:var(--muted);letter-spacing:.06em">
+          📅 ${formatDate(r.date)}
+        </td>
+      </tr>`;
+    }
+    prevDate = r.date;
+    html += `
     <tr style="cursor:pointer" onclick="openModal(${r.id})">
       <td>
-        <div style="font-family:'DM Mono',monospace;font-size:.82rem">${formatDate(r.date)}</div>
-        <div style="font-size:.75rem;color:var(--muted)">${r.time}〜</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.82rem">${r.time}〜</div>
       </td>
       <td>
         <div class="customer-name">${r.name}${r.firstVisit?' <span style="font-size:.65rem;color:var(--yellow)">初</span>':''}</div>
@@ -1024,8 +1042,9 @@ function renderTable() {
           ${r.status!=='cancel'&&r.status!=='done'?`<button class="action-btn cancel-btn" onclick="changeStatus(${r.id},'cancel')">ｷｬﾝｾﾙ</button>`:''}
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  });
+  document.getElementById('tbody').innerHTML = html;
 }
 
 function formatDate(str) {
