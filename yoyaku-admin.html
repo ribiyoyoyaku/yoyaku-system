@@ -779,10 +779,29 @@
       <div class="settings-page" id="salesPage">
 
         <!-- 期間タブ -->
-        <div class="tabs" id="salesTabs">
-          <div class="tab active" onclick="filterSalesTab('today', this)">今日</div>
-          <div class="tab" onclick="filterSalesTab('week', this)">今週</div>
-          <div class="tab" onclick="filterSalesTab('month', this)">今月</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+          <div class="tabs" id="salesTabs" style="margin-bottom:0">
+            <div class="tab active" onclick="filterSalesTab('today', this)">今日</div>
+            <div class="tab" onclick="filterSalesTab('week', this)">今週</div>
+            <div class="tab" onclick="filterSalesTab('month', this)">今月</div>
+            <div class="tab" onclick="filterSalesTab('past', this)">過去月</div>
+          </div>
+          <!-- 月ナビゲーター（過去月タブ選択時のみ表示） -->
+          <div id="monthNav" style="display:none;align-items:center;gap:8px">
+            <button onclick="changeNavMonth(-1)" style="
+              width:32px;height:32px;border-radius:10px;border:1.5px solid var(--border);
+              background:var(--panel);color:var(--text);font-size:1rem;cursor:pointer;
+              display:flex;align-items:center;justify-content:center;transition:all .2s;
+            " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent2)'"
+               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text)'">‹</button>
+            <span id="monthNavLabel" style="font-family:'DM Sans',sans-serif;font-weight:700;font-size:.95rem;min-width:110px;text-align:center"></span>
+            <button onclick="changeNavMonth(1)" id="monthNavNext" style="
+              width:32px;height:32px;border-radius:10px;border:1.5px solid var(--border);
+              background:var(--panel);color:var(--text);font-size:1rem;cursor:pointer;
+              display:flex;align-items:center;justify-content:center;transition:all .2s;
+            " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent2)'"
+               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text)'">›</button>
+          </div>
         </div>
 
         <!-- 売上サマリーカード -->
@@ -1385,9 +1404,11 @@ function showPage(page) {
     document.getElementById('nav-sales').classList.add('active');
     document.getElementById('salesPage').classList.add('active');
     document.querySelector('.topbar-title').textContent = '売上';
-    // タブをリセットしてから今日表示
+    // タブと月ナビをリセットして今日表示
     document.querySelectorAll('#salesTabs .tab').forEach(t => t.classList.remove('active'));
     document.querySelector('#salesTabs .tab').classList.add('active');
+    document.getElementById('monthNav').style.display = 'none';
+    currentSalesTab = 'today';
     renderSalesPage('today');
 
   } else {
@@ -1539,16 +1560,56 @@ async function saveSettings() {
 
 // ─── 売上ページ ───
 let currentSalesTab = 'today';
+let navYear  = new Date().getFullYear();
+let navMonth = new Date().getMonth() - 1; // 過去月タブのデフォルトは先月
+if (navMonth < 0) { navMonth = 11; navYear--; }
 
 function filterSalesTab(period, el) {
   currentSalesTab = period;
   document.querySelectorAll('#salesTabs .tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  renderSalesPage(period);
+
+  const nav = document.getElementById('monthNav');
+  if (period === 'past') {
+    nav.style.display = 'flex';
+    updateMonthNav();
+    renderSalesPage('past');
+  } else {
+    nav.style.display = 'none';
+    renderSalesPage(period);
+  }
+}
+
+function updateMonthNav() {
+  document.getElementById('monthNavLabel').textContent = `${navYear}年${navMonth+1}月`;
+  // 今月以降には進めない
+  const now = new Date();
+  const isCurrentOrFuture = (navYear > now.getFullYear()) ||
+    (navYear === now.getFullYear() && navMonth >= now.getMonth());
+  const nextBtn = document.getElementById('monthNavNext');
+  nextBtn.disabled = isCurrentOrFuture;
+  nextBtn.style.opacity = isCurrentOrFuture ? '0.3' : '1';
+  nextBtn.style.cursor  = isCurrentOrFuture ? 'not-allowed' : 'pointer';
+}
+
+function changeNavMonth(dir) {
+  navMonth += dir;
+  if (navMonth < 0)  { navMonth = 11; navYear--; }
+  if (navMonth > 11) { navMonth = 0;  navYear++; }
+  // 今月以降には進まない
+  const now = new Date();
+  if (navYear > now.getFullYear() || (navYear === now.getFullYear() && navMonth >= now.getMonth())) {
+    navMonth -= dir;
+    if (navMonth < 0)  { navMonth = 11; navYear--; }
+    if (navMonth > 11) { navMonth = 0;  navYear++; }
+    return;
+  }
+  updateMonthNav();
+  renderSalesPage('past');
 }
 
 function getSalesPeriodRange(period) {
-  const now  = new Date();
+  const now = new Date();
   const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
 
   if (period === 'today') {
@@ -1556,16 +1617,20 @@ function getSalesPeriodRange(period) {
     return { start: s, end: s, label: `${m+1}月${d}日（今日）` };
   }
   if (period === 'week') {
-    // 今週月曜〜今日
-    const dow  = now.getDay(); // 0=日
-    const diff = dow === 0 ? 6 : dow - 1; // 月曜起点
+    const dow  = now.getDay();
+    const diff = dow === 0 ? 6 : dow - 1;
     const mon  = new Date(y, m, d - diff);
     const sun  = new Date(y, m, d - diff + 6);
     return { start: fmt(mon), end: fmt(sun), label: `${mon.getMonth()+1}/${mon.getDate()} 〜 ${sun.getMonth()+1}/${sun.getDate()}` };
   }
-  // month
+  if (period === 'past') {
+    const ms = fmt(new Date(navYear, navMonth, 1));
+    const me = fmt(new Date(navYear, navMonth + 1, 0));
+    return { start: ms, end: me, label: `${navYear}年${navMonth+1}月` };
+  }
+  // month（今月）
   const ms = fmt(new Date(y, m, 1));
-  const me = fmt(new Date(y, m+1, 0));
+  const me = fmt(new Date(y, m + 1, 0));
   return { start: ms, end: me, label: `${y}年${m+1}月` };
 }
 
