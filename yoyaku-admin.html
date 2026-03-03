@@ -245,6 +245,8 @@
   .action-btn.confirm:hover { background: rgba(52,211,153,.1); }
   .action-btn.cancel-btn { border-color: rgba(248,113,113,.3); color: var(--red); }
   .action-btn.cancel-btn:hover { background: rgba(248,113,113,.08); }
+  .action-btn.revert { border-color: rgba(107,114,148,.4); color: var(--muted); font-size: .68rem; }
+  .action-btn.revert:hover { border-color: var(--yellow); color: var(--yellow); background: rgba(251,191,36,.06); }
 
   .customer-name { font-weight: 500; }
   .customer-tel { font-size: .74rem; color: var(--muted); margin-top: 2px; font-family: 'DM Mono', monospace; }
@@ -383,6 +385,8 @@
   .modal-btn.red:hover { background: rgba(248,113,113,.2); }
   .modal-btn.close-btn { background: var(--panel2); color: var(--muted); border: 1px solid var(--border); }
   .modal-btn.close-btn:hover { color: var(--text); }
+  .modal-btn.revert { background: rgba(251,191,36,.08); color: var(--yellow); border: 1px solid rgba(251,191,36,.3); }
+  .modal-btn.revert:hover { background: rgba(251,191,36,.18); }
 
   .memo-box {
     background: var(--panel2);
@@ -993,14 +997,34 @@ function loadSampleData() {
 }
 
 // ─── ステータスをスプレッドシートに書き込む ───
+// ─── ステータスを一段階前に戻す ───
+function prevStatus(current) {
+  // done → confirmed → new、cancel → new
+  if (current === 'done')      return 'confirmed';
+  if (current === 'confirmed') return 'new';
+  if (current === 'cancel')    return 'new';
+  return null; // new はこれ以上戻せない
+}
+
 async function changeStatus(id, newStatus) {
   const r = reservations.find(r => r.id === id);
   if (!r) return;
+
+  const oldStatus = r.status; // 元のステータスを保存
 
   // 楽観的UI更新（先に画面を変える）
   r.status = newStatus;
   refresh();
   closeModal();
+
+  // トーストに「元に戻す」ボタン付きで表示
+  const msgMap = {
+    confirmed: '確認済にしました',
+    done:      '完了にしました',
+    cancel:    'キャンセルしました',
+    new:       '未確認に戻しました',
+  };
+  showToastWithUndo(msgMap[newStatus] || 'ステータスを変更しました', id, oldStatus);
 
   if (!SHEET_URL.includes('ここにURLを貼り付け')) {
     try {
@@ -1024,17 +1048,13 @@ async function changeStatus(id, newStatus) {
             }
           })
         });
-        showToast('✅ 確認済にしました。' + (r.email ? ' 確認メールを送信しました！' : ''));
       } else {
-        // それ以外は通常のステータス更新
         await fetch(SHEET_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'updateStatus', rowIndex: r.rowIndex, status: newStatus })
         });
-        if (newStatus === 'cancel') showToast('🚫 キャンセルしました');
-        if (newStatus === 'done')   showToast('✅ 完了にしました');
       }
     } catch(e) {
       console.error('ステータス更新エラー:', e);
@@ -1042,8 +1062,8 @@ async function changeStatus(id, newStatus) {
   }
 }
 
-// ─── トースト通知 ───
-function showToast(msg) {
+// ─── トースト通知（元に戻すボタン付き）───
+function showToastWithUndo(msg, id, oldStatus) {
   let toast = document.getElementById('toast');
   if (!toast) {
     toast = document.createElement('div');
@@ -1051,16 +1071,41 @@ function showToast(msg) {
     toast.style.cssText = [
       'position:fixed', 'bottom:28px', 'left:50%', 'transform:translateX(-50%)',
       'background:#1f2236', 'color:#e8eaf0', 'border:1px solid #2e3347',
-      'border-radius:12px', 'padding:12px 22px', 'font-size:.85rem',
+      'border-radius:12px', 'padding:12px 20px', 'font-size:.85rem',
       'box-shadow:0 4px 20px rgba(0,0,0,.4)', 'z-index:9999',
-      'transition:opacity .3s', 'opacity:0', 'pointer-events:none'
+      'display:flex', 'align-items:center', 'gap:14px',
+      'transition:opacity .3s', 'opacity:0', 'pointer-events:none',
+      'white-space:nowrap'
     ].join(';');
     document.body.appendChild(toast);
   }
-  toast.textContent = msg;
-  toast.style.opacity = '1';
+  toast.innerHTML = `
+    <span>${msg}</span>
+    <button onclick="undoStatus(${id},'${oldStatus}')" style="
+      background:rgba(251,191,36,.15);color:var(--yellow);border:1px solid rgba(251,191,36,.4);
+      border-radius:7px;padding:4px 11px;font-size:.78rem;cursor:pointer;
+      font-family:inherit;white-space:nowrap;flex-shrink:0;
+    ">↩ 元に戻す</button>
+  `;
+  toast.style.opacity  = '1';
+  toast.style.pointerEvents = 'auto';
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.style.opacity = '0', 3000);
+  toast._timer = setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.pointerEvents = 'none';
+  }, 5000);
+}
+
+function showToast(msg) {
+  showToastWithUndo(msg, null, null);
+}
+
+// ─── 元に戻す ───
+function undoStatus(id, oldStatus) {
+  // トーストを即消す
+  const toast = document.getElementById('toast');
+  if (toast) { toast.style.opacity = '0'; toast.style.pointerEvents = 'none'; }
+  changeStatus(id, oldStatus);
 }
 
 // ─── まとめて再描画 ───
@@ -1169,6 +1214,7 @@ function renderTable() {
             ${r.status==='new'       ? `<button class="action-btn confirm"    onclick="changeStatus(${r.id},'confirmed')">確認済に</button>` : ''}
             ${r.status==='confirmed' ? `<button class="action-btn confirm"    onclick="changeStatus(${r.id},'done')">完了</button>` : ''}
             ${r.status!=='cancel'&&r.status!=='done' ? `<button class="action-btn cancel-btn" onclick="changeStatus(${r.id},'cancel')">ｷｬﾝｾﾙ</button>` : ''}
+            ${prevStatus(r.status) ? `<button class="action-btn revert" onclick="changeStatus(${r.id},'${prevStatus(r.status)}')">↩ 戻す</button>` : ''}
           </div>
         </td>
       </tr>`;
@@ -1218,6 +1264,7 @@ function openModal(id) {
     ${r.status==='new'    ?`<button class="modal-btn green" onclick="changeStatus(${r.id},'confirmed')">✅ 確認済にする</button>`:''}
     ${r.status==='confirmed'?`<button class="modal-btn green" onclick="changeStatus(${r.id},'done')">✅ 完了にする</button>`:''}
     ${r.status!=='cancel'&&r.status!=='done'?`<button class="modal-btn red" onclick="changeStatus(${r.id},'cancel')">キャンセル</button>`:''}
+    ${prevStatus(r.status)?`<button class="modal-btn revert" onclick="changeStatus(${r.id},'${prevStatus(r.status)}')">↩ ${statusLabel[prevStatus(r.status)]}に戻す</button>`:''}
     <button class="modal-btn close-btn" onclick="closeModal()">閉じる</button>
   `;
   document.getElementById('modal').classList.add('show');
