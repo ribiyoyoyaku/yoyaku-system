@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>予約受付</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- ★ 店舗設定ファイルを読み込む（このファイルだけ編集すればOK） -->
+<script src="shop-config.js"></script>
+
+<style>
+  :root {
+    --bg: #F7F8FC; --white: #FFFFFF;
+    --accent: #7C6FF7; --accent-light: #EEF0FF; --accent2: #5B55D6;
+    --pink: #F472B6; --pink-light: #FDF2F8;
+    --mint: #34D399; --mint-light: #ECFDF5;
+    --text: #1A1A2E; --muted: #9094A8; --border: #E8EAF2;
+    --shadow: rgba(124,111,247,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  body::before { content:''; position:fixed; top:-200px; right:-200px; width:500px; height:500px; background:radial-gradient(circle,rgba(124,111,247,.08),transparent 70%); pointer-events:none; z-index:0; }
+  body::after  { content:''; position:fixed; bottom:-150px; left:-150px; width:400px; height:400px; background:radial-gradient(circle,rgba(244,114,182,.08),transparent 70%); pointer-events:none; z-index:0; }
+
+  header { background:var(--white); border-bottom:1px solid var(--border); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(0,0,0,.04); position:relative; }
+  .header-logo { display:flex; align-items:center; gap:10px; }
+  .logo-mark { width:36px; height:36px; background:linear-gradient(135deg,var(--accent),var(--pink)); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; box-shadow:0 4px 12px var(--shadow); }
+  .logo-text { font-family:'DM Sans',sans-serif; font-size:1rem; font-weight:700; color:var(--text); }
+  .logo-sub { font-size:.62rem; color:var(--muted); letter-spacing:.06em; }
+  .header-badge { background:var(--accent-light); color:var(--accent); border-radius:20px; padding:5px 13px; font-size:.7rem; font-weight:700; }
+
+  .step-bar { display:flex; align-items:center; justify-content:center; padding:16px 24px 14px; background:var(--white); border-bottom:1px solid var(--border); position:relative; z-index:1; }
+  .step-dot { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .step-dot .num { width:30px; height:30px; border-radius:50%; background:var(--border); color:var(--muted); font-size:.75rem; font-weight:700; font-family:'DM Sans',sans-serif; display:flex; align-items:center; justify-content:center; transition:all .3s; }
+  .step-dot .label { font-size:.6rem; color:var(--muted); white-space:nowrap; transition:color .3s; }
+  .step-dot.active .num { background:linear-gradient(135deg,var(--accent),var(--pink)); color:white; box-shadow:0 4px 12px var(--shadow); }
+  .step-dot.active .label { color:var(--accent); font-weight:700; }
+  .step-dot.done .num { background:var(--mint-light); color:var(--mint); border:2px solid var(--mint); }
+  .step-dot.done .num span { display:none; }
+  .step-dot.done .num::after { content:'✓'; }
+  .step-line { height:2px; width:32px; background:var(--border); margin-bottom:18px; transition:background .3s; border-radius:2px; }
+  .step-line.done { background:linear-gradient(90deg,var(--accent),var(--pink)); }
+
+  main { max-width:480px; margin:0 auto; padding:20px 16px 60px; position:relative; z-index:1; }
+  .section-title { font-size:.72rem; font-weight:700; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; margin-bottom:12px; }
+  .card { background:var(--white); border-radius:20px; padding:20px; margin-bottom:14px; border:1px solid var(--border); box-shadow:0 2px 16px rgba(0,0,0,.04); }
+
+  .menu-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .menu-item { border:2px solid var(--border); border-radius:16px; padding:16px 12px; text-align:center; cursor:pointer; transition:all .2s; background:var(--white); position:relative; }
+  .menu-item:hover { border-color:var(--accent); box-shadow:0 4px 16px var(--shadow); transform:translateY(-2px); }
+  .menu-item.selected { border-color:var(--accent); background:var(--accent-light); box-shadow:0 4px 20px var(--shadow); }
+  .menu-item .check { display:none; position:absolute; top:8px; right:8px; width:20px; height:20px; background:linear-gradient(135deg,var(--accent),var(--pink)); border-radius:50%; color:white; font-size:.65rem; font-weight:900; align-items:center; justify-content:center; }
+  .menu-item.selected .check { display:flex; }
+  .menu-item .icon { font-size:1.8rem; margin-bottom:8px; }
+  .menu-item .name { font-size:.82rem; font-weight:700; }
+  .menu-item .price { font-size:.72rem; color:var(--accent); margin-top:3px; font-family:'DM Sans',sans-serif; font-weight:600; }
+  .menu-item .duration { font-size:.65rem; color:var(--muted); margin-top:2px; }
+
+  .staff-list { display:flex; gap:10px; }
+  .staff-item { flex:1; border:2px solid var(--border); border-radius:16px; padding:14px 8px; text-align:center; cursor:pointer; transition:all .2s; }
+  .staff-item:hover { border-color:var(--pink); transform:translateY(-2px); }
+  .staff-item.selected { border-color:var(--pink); background:var(--pink-light); }
+  .staff-avatar { width:50px; height:50px; border-radius:50%; margin:0 auto 8px; font-size:1.5rem; background:var(--bg); display:flex; align-items:center; justify-content:center; border:2px solid var(--border); }
+  .staff-item.selected .staff-avatar { border-color:var(--pink); background:var(--pink-light); }
+  .staff-name { font-size:.78rem; font-weight:700; }
+  .staff-role { font-size:.62rem; color:var(--muted); margin-top:2px; }
+
+  .cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .cal-nav { width:32px; height:32px; border-radius:10px; border:1.5px solid var(--border); background:var(--white); cursor:pointer; font-size:1rem; color:var(--text); display:flex; align-items:center; justify-content:center; transition:all .2s; }
+  .cal-nav:hover { background:var(--accent-light); border-color:var(--accent); color:var(--accent); }
+  .cal-month { font-family:'DM Sans',sans-serif; font-weight:700; font-size:.95rem; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-day-name { text-align:center; font-size:.6rem; color:var(--muted); padding:4px 0; font-weight:600; }
+  .cal-day { aspect-ratio:1; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:.78rem; cursor:pointer; transition:all .15s; border:1.5px solid transparent; font-family:'DM Sans',sans-serif; }
+  .cal-day:not(.empty):not(.past):not(.closed):hover { background:var(--accent-light); border-color:var(--accent); color:var(--accent); }
+  .cal-day.selected { background:linear-gradient(135deg,var(--accent),var(--pink)) !important; color:white !important; font-weight:700; border:none; box-shadow:0 4px 12px var(--shadow); }
+  .cal-day.today { border-color:var(--accent); color:var(--accent); font-weight:700; }
+  .cal-day.past,.cal-day.closed { color:#ccc; cursor:default; }
+  .cal-day.empty { cursor:default; }
+
+  .time-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:14px; }
+  .time-slot { border:2px solid var(--border); border-radius:12px; padding:11px 4px; text-align:center; cursor:pointer; font-size:.82rem; font-weight:600; font-family:'DM Sans',sans-serif; transition:all .15s; background:var(--white); }
+  .time-slot:hover { border-color:var(--accent); background:var(--accent-light); color:var(--accent); }
+  .time-slot.selected { background:linear-gradient(135deg,var(--accent),var(--pink)); color:white; border-color:transparent; box-shadow:0 4px 12px var(--shadow); }
+  .time-slot.full { background:var(--bg); color:#ccc; border-color:var(--border); cursor:default; font-size:.7rem; }
+
+  .form-group { margin-bottom:14px; }
+  .form-label { font-size:.75rem; font-weight:700; margin-bottom:6px; display:block; color:var(--muted); letter-spacing:.05em; text-transform:uppercase; }
+  .form-label span { color:var(--accent); margin-left:4px; font-size:.65rem; text-transform:none; letter-spacing:0; }
+  .form-input { width:100%; padding:12px 14px; border:2px solid var(--border); border-radius:12px; font-size:.9rem; font-family:'Noto Sans JP',sans-serif; background:var(--white); color:var(--text); transition:border-color .2s,box-shadow .2s; outline:none; }
+  .form-input:focus { border-color:var(--accent); box-shadow:0 0 0 4px var(--accent-light); }
+  .form-input::placeholder { color:var(--muted); }
+  .form-textarea { min-height:80px; resize:vertical; }
+
+  .confirm-row { display:flex; justify-content:space-between; align-items:flex-start; padding:11px 0; border-bottom:1px solid var(--border); font-size:.85rem; }
+  .confirm-row:last-child { border-bottom:none; }
+  .confirm-label { color:var(--muted); font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; min-width:70px; }
+  .confirm-value { font-weight:700; text-align:right; }
+
+  .btn-primary { width:100%; padding:15px; background:linear-gradient(135deg,var(--accent),var(--pink)); color:white; border:none; border-radius:14px; font-size:.95rem; font-weight:700; font-family:'Noto Sans JP',sans-serif; cursor:pointer; transition:all .2s; margin-top:8px; box-shadow:0 6px 20px var(--shadow); }
+  .btn-primary:hover { transform:translateY(-2px); box-shadow:0 10px 28px var(--shadow); }
+  .btn-primary:disabled { background:var(--border); color:var(--muted); cursor:not-allowed; transform:none; box-shadow:none; }
+  .btn-back { width:100%; padding:12px; background:none; color:var(--muted); border:2px solid var(--border); border-radius:14px; font-size:.85rem; font-family:'Noto Sans JP',sans-serif; cursor:pointer; margin-top:8px; transition:all .2s; }
+  .btn-back:hover { border-color:var(--accent); color:var(--accent); }
+
+  .complete-wrap { text-align:center; padding:36px 20px; }
+  .complete-icon { font-size:3.5rem; margin-bottom:14px; animation:pop .5s ease; }
+  @keyframes pop { 0%{transform:scale(0) rotate(-10deg)} 70%{transform:scale(1.15) rotate(3deg)} 100%{transform:scale(1)} }
+  .complete-title { font-family:'DM Sans',sans-serif; font-size:1.6rem; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--pink)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; }
+  .complete-sub { font-size:.85rem; color:var(--muted); line-height:1.8; }
+  .notice-box { background:linear-gradient(135deg,var(--accent-light),var(--pink-light)); border:1.5px solid var(--border); border-radius:14px; padding:14px 16px; font-size:.82rem; margin-top:16px; line-height:1.8; text-align:left; }
+
+  .step-page { display:none; animation:fadeIn .25s ease; }
+  .step-page.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">
+    <div class="logo-mark">✂</div>
+    <div>
+      <div class="logo-text" id="headerName"></div>
+      <div class="logo-sub" id="headerTagline"></div>
+    </div>
+  </div>
+  <div class="header-badge">✨ 空き即確認</div>
+</header>
+
+<div class="step-bar" id="stepBar">
+  <div class="step-dot active" id="stepDot1"><div class="num"><span>1</span></div><div class="label">メニュー</div></div>
+  <div class="step-line" id="stepLine1"></div>
+  <div class="step-dot" id="stepDot2"><div class="num"><span>2</span></div><div class="label">日時</div></div>
+  <div class="step-line" id="stepLine2"></div>
+  <div class="step-dot" id="stepDot3"><div class="num"><span>3</span></div><div class="label">情報入力</div></div>
+  <div class="step-line" id="stepLine3"></div>
+  <div class="step-dot" id="stepDot4"><div class="num"><span>4</span></div><div class="label">確認</div></div>
+</div>
+
+<main>
+  <!-- Step 1 -->
+  <div class="step-page active" id="page1">
+    <div class="card">
+      <div class="section-title">メニューを選ぶ</div>
+      <div class="menu-grid" id="menuGrid"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">担当スタッフ</div>
+      <div class="staff-list" id="staffList"></div>
+    </div>
+    <button class="btn-primary" id="btn1" onclick="goStep(2)" disabled>日時を選ぶ →</button>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step-page" id="page2">
+    <div class="card">
+      <div class="section-title">日付を選ぶ</div>
+      <div class="cal-header">
+        <button class="cal-nav" onclick="changeMonth(-1)">‹</button>
+        <span class="cal-month" id="calTitle"></span>
+        <button class="cal-nav" onclick="changeMonth(1)">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+    <div class="card" id="timeCard" style="display:none">
+      <div class="section-title">時間を選ぶ</div>
+      <div class="time-grid" id="timeGrid"></div>
+    </div>
+    <button class="btn-primary" id="btn2" onclick="goStep(3)" disabled>情報を入力する →</button>
+    <button class="btn-back" onclick="goStep(1)">← 戻る</button>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step-page" id="page3">
+    <div class="card">
+      <div class="section-title">お客様情報</div>
+      <div class="form-group">
+        <label class="form-label">お名前<span>必須</span></label>
+        <input type="text" class="form-input" id="name" placeholder="山田 花子" oninput="checkForm3()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">電話番号<span>必須</span></label>
+        <input type="tel" class="form-input" id="tel" placeholder="090-1234-5678" oninput="checkForm3()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス<span>任意 / 確認メールが届きます</span></label>
+        <input type="email" class="form-input" id="email" placeholder="example@gmail.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ご要望<span>任意</span></label>
+        <textarea class="form-input form-textarea" id="memo" placeholder="例：前回と同じ感じで、くせ毛で悩んでいますなど"></textarea>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem;color:var(--muted)">
+          <input type="checkbox" id="firstVisit" style="width:18px;height:18px;accent-color:var(--accent)">
+          初めてのご来店です
+        </label>
+      </div>
+    </div>
+    <button class="btn-primary" id="btn3" onclick="goStep(4)" disabled>内容を確認する →</button>
+    <button class="btn-back" onclick="goStep(2)">← 戻る</button>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step-page" id="page4">
+    <div class="card">
+      <div class="section-title">予約内容の確認</div>
+      <div class="confirm-row"><span class="confirm-label">Menu</span><span class="confirm-value" id="cfMenu">—</span></div>
+      <div class="confirm-row"><span class="confirm-label">Staff</span><span class="confirm-value" id="cfStaff">—</span></div>
+      <div class="confirm-row"><span class="confirm-label">Date</span><span class="confirm-value" id="cfDatetime">—</span></div>
+      <div class="confirm-row"><span class="confirm-label">Name</span><span class="confirm-value" id="cfName">—</span></div>
+      <div class="confirm-row"><span class="confirm-label">Tel</span><span class="confirm-value" id="cfTel">—</span></div>
+      <div class="confirm-row" id="cfMemoRow" style="display:none"><span class="confirm-label">Note</span><span class="confirm-value" id="cfMemo" style="max-width:60%;word-break:break-all">—</span></div>
+      <div class="confirm-row"><span class="confirm-label">Price</span><span class="confirm-value" id="cfPrice" style="color:var(--accent)">—</span></div>
+    </div>
+    <p style="font-size:.72rem;color:var(--muted);margin-bottom:8px;text-align:center">内容を確認して「予約を確定する」を押してください</p>
+    <button class="btn-primary" onclick="submitReservation()">予約を確定する 🎉</button>
+    <button class="btn-back" onclick="goStep(3)">← 戻る</button>
+  </div>
+
+  <!-- Complete -->
+  <div class="step-page" id="pageComplete">
+    <div class="card complete-wrap">
+      <div class="complete-icon">🎉</div>
+      <div class="complete-title">予約完了！</div>
+      <p class="complete-sub">ご予約ありがとうございます。<br>当日のご来店をお待ちしております。</p>
+      <div class="notice-box" id="cfSummary"></div>
+    </div>
+    <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:14px" id="inquiryText"></p>
+  </div>
+</main>
+
+<script>
+// ─── 設定ファイルから読み込んで初期化 ───
+document.title = `予約 | ${SHOP_CONFIG.name}`;
+document.getElementById('headerName').textContent    = SHOP_CONFIG.name;
+document.getElementById('headerTagline').textContent = SHOP_CONFIG.tagline;
+document.getElementById('inquiryText').textContent   = `お問い合わせはお電話（${SHOP_CONFIG.inquiryTel}）まで`;
+
+// メニューをDOMに生成
+document.getElementById('menuGrid').innerHTML = SHOP_CONFIG.menus.map(m => `
+  <div class="menu-item" data-menu="${m.name}" data-price="${m.price}" data-price-num="${m.priceNum}" data-duration="${m.duration}" onclick="selectMenu(this)">
+    <div class="check">✓</div>
+    <div class="icon">${m.icon}</div>
+    <div class="name">${m.name}</div>
+    <div class="price">${m.price}</div>
+    <div class="duration">${m.duration}</div>
+  </div>`).join('');
+
+// スタッフをDOMに生成
+document.getElementById('staffList').innerHTML = SHOP_CONFIG.staff.map((st, i) => `
+  <div class="staff-item${i===0?' selected':''}" data-staff="${st.value}" onclick="selectStaff(this)">
+    <div class="staff-avatar">${st.avatar}</div>
+    <div class="staff-name">${st.name}</div>
+    <div class="staff-role">${st.role}</div>
+  </div>`).join('');
+
+// ─── State ───
+let state = {
+  menu:null, menuPrice:null, menuPriceNum:null, menuDuration:null,
+  staff: SHOP_CONFIG.staff[0].value,
+  date:null, time:null, calYear:null, calMonth:null
+};
+const today = new Date();
+state.calYear  = today.getFullYear();
+state.calMonth = today.getMonth();
+
+const TIMES = ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+let bookedSlots  = {};
+let shopSettings = { closedDays:[0], openTime:'10:00', closeTime:'18:00', breaks:[], holidays:[] };
+
+async function fetchBookedSlots() {
+  try {
+    const res  = await fetch(SHOP_CONFIG.sheetUrl + '?action=getBooked');
+    const json = await res.json();
+    if (json.success) { bookedSlots = json.booked; if (json.settings) shopSettings = json.settings; }
+  } catch(e) { console.log('取得失敗:', e); }
+}
+
+function isTimeAvailable(t) {
+  if (t < shopSettings.openTime || t >= shopSettings.closeTime) return false;
+  for (const b of shopSettings.breaks) { if (t >= b.start && t < b.end) return false; }
+  return true;
+}
+
+function selectMenu(el) {
+  document.querySelectorAll('.menu-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  state.menu = el.dataset.menu; state.menuPrice = el.dataset.price;
+  state.menuPriceNum = el.dataset.priceNum; state.menuDuration = el.dataset.duration;
+  document.getElementById('btn1').disabled = false;
+}
+function selectStaff(el) {
+  document.querySelectorAll('.staff-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected'); state.staff = el.dataset.staff;
+}
+function checkForm3() {
+  const n = document.getElementById('name').value.trim();
+  const t = document.getElementById('tel').value.trim();
+  document.getElementById('btn3').disabled = !(n && t);
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calGrid');
+  const y = state.calYear, m = state.calMonth;
+  document.getElementById('calTitle').textContent = `${y}年 ${m+1}月`;
+  const dayNames = ['日','月','火','水','木','金','土'];
+  let html = dayNames.map((d,i) => `<div class="cal-day-name" style="${i===0?'color:#F472B6':i===6?'color:#818CF8':''}">${d}</div>`).join('');
+  const first = new Date(y,m,1).getDay(), last = new Date(y,m+1,0).getDate();
+  for (let i=0;i<first;i++) html+=`<div class="cal-day empty"></div>`;
+  for (let d=1;d<=last;d++) {
+    const date    = new Date(y,m,d);
+    const isToday = date.toDateString()===today.toDateString();
+    const isPast  = date<new Date(today.getFullYear(),today.getMonth(),today.getDate());
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isClosed  = (shopSettings.closedDays||[0]).includes(date.getDay());
+    const isHoliday = (shopSettings.holidays||[]).some(h=>h.date===dateStr);
+    const isSelected = state.date===dateStr;
+    let cls = 'cal-day';
+    if (isPast) cls+=' past'; else if (isClosed||isHoliday) cls+=' closed'; else if (isSelected) cls+=' selected';
+    if (isToday&&!isSelected) cls+=' today';
+    const onclick = (!isPast&&!isClosed&&!isHoliday)?`onclick="selectDate('${dateStr}')"` :'';
+    html+=`<div class="${cls}" ${onclick}>${d}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function changeMonth(dir) {
+  state.calMonth+=dir;
+  if(state.calMonth<0){state.calMonth=11;state.calYear--;} if(state.calMonth>11){state.calMonth=0;state.calYear++;}
+  renderCalendar();
+}
+
+async function selectDate(dateStr) {
+  state.date=dateStr; state.time=null; renderCalendar();
+  document.getElementById('timeCard').style.display='block';
+  document.getElementById('timeGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.82rem;padding:12px">空き状況を確認中...</div>';
+  document.getElementById('btn2').disabled=true;
+  await fetchBookedSlots(); renderTimes();
+}
+
+function renderTimes() {
+  const grid   = document.getElementById('timeGrid');
+  const booked = bookedSlots[state.date]||[];
+  const visible = TIMES.filter(t=>isTimeAvailable(t));
+  if (!visible.length) { grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.82rem;padding:12px">この日は受付時間外です</div>'; return; }
+  grid.innerHTML = visible.map(t => {
+    const full=booked.includes(t), sel=state.time===t;
+    return `<div class="time-slot${full?' full':sel?' selected':''}" ${!full?`onclick="selectTime('${t}')"`:''}>${t}${full?'<br><small style="font-size:.62rem">満席</small>':''}</div>`;
+  }).join('');
+}
+
+function selectTime(t) { state.time=t; renderTimes(); document.getElementById('btn2').disabled=false; }
+
+function goStep(n) {
+  document.querySelectorAll('.step-page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`page${n}`).classList.add('active');
+  [1,2,3,4].forEach(i=>{
+    const dot=document.getElementById(`stepDot${i}`), line=document.getElementById(`stepLine${i}`);
+    dot.classList.remove('active','done'); if(line) line.classList.remove('done');
+    if(i<n){dot.classList.add('done'); if(line) line.classList.add('done');} if(i===n) dot.classList.add('active');
+  });
+  if(n===2) renderCalendar(); if(n===4) fillConfirm();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function fillConfirm() {
+  const d = state.date?new Date(state.date+'T00:00:00'):null;
+  const wdays=['日','月','火','水','木','金','土'];
+  const dateStr = d?`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${wdays[d.getDay()]}）`:'—';
+  document.getElementById('cfMenu').textContent     = state.menu||'—';
+  document.getElementById('cfStaff').textContent    = state.staff;
+  document.getElementById('cfDatetime').textContent = `${dateStr} ${state.time}〜`;
+  document.getElementById('cfName').textContent     = document.getElementById('name').value;
+  document.getElementById('cfTel').textContent      = document.getElementById('tel').value;
+  document.getElementById('cfPrice').textContent    = state.menuPrice?`${state.menuPrice}（${state.menuDuration}）`:'—';
+  const memo = document.getElementById('memo').value.trim();
+  if(memo){document.getElementById('cfMemo').textContent=memo; document.getElementById('cfMemoRow').style.display='flex';}
+  else document.getElementById('cfMemoRow').style.display='none';
+}
+
+async function submitReservation() {
+  const btn=document.querySelector('#page4 .btn-primary');
+  btn.disabled=true; btn.textContent='送信中...';
+  const payload={
+    date:state.date, time:state.time, menu:state.menu, staff:state.staff,
+    price:state.menuPriceNum,
+    name:document.getElementById('name').value, tel:document.getElementById('tel').value,
+    email:document.getElementById('email').value, memo:document.getElementById('memo').value,
+    firstVisit:document.getElementById('firstVisit').checked
+  };
+  try { await fetch(SHOP_CONFIG.sheetUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); }
+  catch(e){console.log('送信完了',e);}
+  const d=new Date(state.date+'T00:00:00');
+  const wdays=['日','月','火','水','木','金','土'];
+  document.getElementById('cfSummary').innerHTML=
+    `📋 <strong>${payload.name} 様</strong><br>`+
+    `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${wdays[d.getDay()]}） ${state.time}〜<br>`+
+    `${state.menu} ／ 担当：${state.staff}`;
+  document.querySelectorAll('.step-page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pageComplete').classList.add('active');
+  document.getElementById('stepBar').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
