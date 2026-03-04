@@ -784,6 +784,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         <div class="badge">🟢 <span>受付中</span></div>
+        <span id="syncBadge" style="font-size:.72rem;color:var(--muted);white-space:nowrap"></span>
         <button class="add-btn" onclick="openAddModal()">＋ 新規予約</button>
       </div>
     </div>
@@ -1045,7 +1046,30 @@ function showError(msg) {
     `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--red)">⚠️ ${msg}</td></tr>`;
 }
 
-// ─── スプレッドシートから全予約を読み込む ───
+// ─── 最終同期時刻（差分取得に使用） ───
+let lastSyncTime  = null; // 最後にサーバーから取得した時刻（ISO文字列）
+let lastTotalRows = null; // 前回取得時のシート総行数（削除検出用）
+
+// ─── 行データ → reservationオブジェクトに変換 ───
+function rowToReservation(row, index) {
+  return {
+    id:            index + 1,
+    reservationId: row[0] || `ROW${index + 2}`,
+    date:          row[2]  || '',
+    time:          row[3]  || '',
+    name:          row[4]  || '',
+    tel:           fixTel(row[5]),
+    email:         row[6]  || '',
+    menu:          row[7]  || '',
+    staff:         row[8]  || '',
+    price:         parseInt(row[9])  || 0,
+    firstVisit:    row[10] === '初来店',
+    memo:          row[11] || '',
+    status:        normalizeStatus(row[12]),
+  };
+}
+
+// ─── 初回フル取得 ───
 async function loadReservations() {
   showLoading('スプレッドシートから読み込み中...');
   try {
@@ -1053,35 +1077,85 @@ async function loadReservations() {
     const json = await res.json();
     if (!json.success) throw new Error(json.error || '取得失敗');
 
-    // シートの行データ → オブジェクトに変換
-    // 列順（GAS v2）: 予約ID / 受付日時 / 予約日 / 予約時間 / お名前 / 電話
-    //                 / メール / メニュー / 担当 / 料金 / 初来店 / ご要望 / ステータス
-    reservations = json.rows.map((row, i) => ({
-      id:             i + 1,                    // 画面内部の連番（表示用）
-      reservationId:  row[0] || `ROW${i + 2}`, // A列: 予約ID（シートの行を一意に識別）
-      date:           row[2] || '',             // C列: 予約日
-      time:           row[3] || '',             // D列: 予約時間
-      name:           row[4] || '',             // E列: お名前
-      tel:            fixTel(row[5]),           // F列: 電話番号
-      email:          row[6] || '',             // G列: メール
-      menu:           row[7] || '',             // H列: メニュー
-      staff:          row[8] || '',             // I列: 担当
-      price:          parseInt(row[9]) || 0,    // J列: 料金
-      firstVisit:     row[10] === '初来店',     // K列: 初来店
-      memo:           row[11] || '',            // L列: ご要望
-      status:         normalizeStatus(row[12]), // M列: ステータス
-    }));
+    reservations = json.rows.map((row, i) => rowToReservation(row, i));
+    lastSyncTime  = new Date().toISOString();
+    lastTotalRows = json.rows.length;
 
     refresh();
+    updateSyncBadge('full');
   } catch(e) {
     console.error(e);
-    // URLが未設定の場合はサンプルデータで表示
     if (SHEET_URL.includes('ここにURLを貼り付け')) {
       loadSampleData();
     } else {
       showError(`読み込みエラー: ${e.message}`);
     }
   }
+}
+
+// ─── 差分取得（3分ごとの自動更新） ───
+async function syncReservations() {
+  // 初回未取得 or URLが未設定なら何もしない
+  if (!lastSyncTime || SHEET_URL.includes('ここにURLを貼り付け')) return;
+
+  try {
+    const url  = `${SHEET_URL}?action=getRecent&since=${encodeURIComponent(lastSyncTime)}`;
+    const res  = await fetch(url);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || '差分取得失敗');
+
+    // シート総行数が減っていたら削除があったと判断 → フル再取得
+    if (json.total !== undefined && lastTotalRows !== null && json.total < lastTotalRows) {
+      console.log('行削除を検出 → フル再取得');
+      await loadReservations();
+      return;
+    }
+
+    // 差分データをマージ
+    if (json.rows.length > 0) {
+      let hasNew = false;
+      json.rows.forEach(row => {
+        const incoming = rowToReservation(row, reservations.length);
+        const existing = reservations.find(r => r.reservationId === incoming.reservationId);
+        if (existing) {
+          // 既存行のステータス等を更新
+          Object.assign(existing, incoming, { id: existing.id }); // idは画面内部の連番を維持
+        } else {
+          // 新規行を追加
+          incoming.id = reservations.length + 1;
+          reservations.push(incoming);
+          hasNew = true;
+        }
+      });
+
+      if (json.total !== undefined) lastTotalRows = json.total;
+      lastSyncTime = json.serverTime || new Date().toISOString();
+
+      refresh();
+      updateSyncBadge(json.rows.length > 0 ? 'updated' : 'ok');
+
+      // 新規予約があったらトーストで通知
+      if (hasNew) showToast(`🔔 新しい予約が${json.rows.filter(r => !reservations.find(e => e.reservationId === r[0])).length || ''}件入りました`);
+    } else {
+      lastSyncTime = json.serverTime || new Date().toISOString();
+      updateSyncBadge('ok');
+    }
+  } catch(e) {
+    console.error('差分取得エラー:', e);
+    updateSyncBadge('error');
+  }
+}
+
+// ─── 同期状態バッジ更新 ───
+function updateSyncBadge(state) {
+  const badge = document.getElementById('syncBadge');
+  if (!badge) return;
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  if (state === 'full')    { badge.textContent = `🔄 全件取得 ${timeStr}`; badge.style.color = 'var(--accent2)'; }
+  if (state === 'updated') { badge.textContent = `🟢 更新あり ${timeStr}`; badge.style.color = 'var(--green)'; }
+  if (state === 'ok')      { badge.textContent = `✅ 同期済 ${timeStr}`;   badge.style.color = 'var(--muted)'; }
+  if (state === 'error')   { badge.textContent = `⚠️ 同期エラー`;          badge.style.color = 'var(--red)'; }
 }
 
 // ─── サンプルデータ（URLが未設定の場合のプレビュー用） ───
@@ -1833,8 +1907,8 @@ function renderSalesPage(period) {
   }
 }
 
-// ─── 自動リロード（3分ごと）───
-setInterval(loadReservations, 3 * 60 * 1000);
+// ─── 自動リロード（3分ごと・差分取得） ───
+setInterval(syncReservations, 3 * 60 * 1000);
 
 // ─── 起動 ───
 // 売上・設定ページを非表示にして予約一覧を初期表示
