@@ -1392,18 +1392,19 @@ const sidebarShopNameEl = document.getElementById('sidebarShopName');
 if (sidebarShopNameEl) sidebarShopNameEl.textContent = SHOP_CONFIG.name;
 
 // ─── GASへの書き込みリクエスト（no-cors不使用・成否を確認できる） ───
-// POSTデータをBase64エンコードしてGETパラメータで送信する
 async function gasPost(data) {
-  const json    = JSON.stringify(data);
-  // btoa は ASCII のみ対応なので、日本語を含む場合は UTF-8 バイト列に変換してから encode
-  const utf8    = new TextEncoder().encode(json);
-  const b64     = btoa(String.fromCharCode(...utf8));
-  const url     = `${SHEET_URL}?data=${encodeURIComponent(b64)}`;
-  const res     = await fetch(url);                    // 普通のGET → レスポンスが読める
-  const result  = await res.json();
+  const json = JSON.stringify(data);
+
+  // 日本語を含むJSONを安全にBase64エンコード
+  // encodeURIComponent → unescape → btoa の順でUnicode対応
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  const url = `${SHEET_URL}?data=${encodeURIComponent(b64)}`;
+
+  const res    = await fetch(url);
+  const result = await res.json();
   if (!result.success) throw new Error(result.error || 'GASエラー');
   return result;
-} // ← shop-config.js から自動取得
+}
 // ============================================================
 
 // ─── ステータスの正規化（日本語→英語） ───
