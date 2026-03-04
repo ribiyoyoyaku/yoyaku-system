@@ -997,6 +997,20 @@ function normalizeStatus(raw) {
   return 'new';
 }
 
+// ─── 電話番号の先頭ゼロ復元（スプレッドシートが数値化した場合の対策） ───
+function fixTel(raw) {
+  if (raw === null || raw === undefined || raw === '') return '';
+  const s = String(raw).trim();
+  // ハイフンありなら正常（例: 090-1234-5678）
+  if (s.includes('-') || s.includes('ー')) return s;
+  // 数字のみで10桁以下なら先頭ゼロが消えている可能性あり
+  if (/^\d+$/.test(s)) {
+    if (s.length === 10) return '0' + s; // 09012345678の0が消えたケース（10桁）
+    if (s.length === 9)  return '0' + s; // 固定電話等（9桁）
+  }
+  return s;
+}
+
 // ─── 定数 ───
 const today    = new Date();
 const weekDays = ['日','月','火','水','木','金','土'];
@@ -1047,7 +1061,7 @@ async function loadReservations() {
       date:       row[1] || '',        // B列: 予約日
       time:       row[2] || '',        // C列: 予約時間
       name:       row[3] || '',        // D列: お名前
-      tel:        row[4] || '',        // E列: 電話番号
+      tel:        fixTel(row[4]),      // E列: 電話番号（先頭ゼロ復元）
       email:      row[5] || '',        // F列: メール
       menu:       row[6] || '',        // G列: メニュー
       staff:      row[7] || '',        // H列: 担当
