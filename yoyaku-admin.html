@@ -516,7 +516,240 @@
   .add-input option { background: var(--panel2); }
 
 
-  /* ─── Sales Page ─── */
+  /* ─── Calendar Page ─── */
+  .cal-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .cal-week-nav {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s;
+  }
+  .cal-week-nav:hover { border-color: var(--accent); color: var(--accent2); background: rgba(124,106,247,.1); }
+  .cal-week-label {
+    font-family: 'DM Mono', monospace;
+    font-size: .9rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 160px;
+    text-align: center;
+  }
+  .cal-today-btn {
+    background: rgba(124,106,247,.15);
+    color: var(--accent2);
+    border: 1px solid rgba(124,106,247,.3);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: .8rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .cal-today-btn:hover { background: rgba(124,106,247,.28); }
+  .cal-legend {
+    display: flex; align-items: center; gap: 5px;
+    font-size: .72rem; color: var(--muted);
+  }
+  .cal-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .cal-wrap {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 230px);
+    min-height: 500px;
+  }
+  .cal-grid-header {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .cal-time-gutter {
+    width: 56px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+  .cal-day-headers {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+  .cal-day-head {
+    padding: 10px 4px 8px;
+    text-align: center;
+    border-left: 1px solid var(--border);
+    cursor: default;
+  }
+  .cal-day-head .dow {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .cal-day-head .dom {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.05rem;
+    font-weight: 700;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto;
+    color: var(--text);
+    transition: all .2s;
+  }
+  .cal-day-head.is-today .dow { color: var(--accent2); }
+  .cal-day-head.is-today .dom {
+    background: linear-gradient(135deg, var(--accent), #a897ff);
+    color: white;
+    box-shadow: 0 4px 12px rgba(124,106,247,.4);
+  }
+  .cal-day-head.is-sun .dow { color: #f87171; }
+  .cal-day-head.is-sat .dow { color: #818cf8; }
+
+  .cal-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+  }
+  .cal-scroll-area::-webkit-scrollbar { width: 6px; }
+  .cal-scroll-area::-webkit-scrollbar-track { background: var(--panel); }
+  .cal-scroll-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .cal-inner {
+    display: flex;
+    position: relative;
+    min-height: 1020px; /* 17スロット × 60px */
+  }
+  .cal-time-col {
+    width: 56px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+  .cal-time-slot-label {
+    height: 60px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 0 8px;
+    padding-top: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: .65rem;
+    color: var(--muted);
+    box-sizing: border-box;
+  }
+  .cal-day-cols {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    position: relative;
+  }
+  .cal-day-col {
+    border-left: 1px solid var(--border);
+    position: relative;
+  }
+  .cal-day-col.is-today { background: rgba(124,106,247,.03); }
+  .cal-hour-cell {
+    height: 60px;
+    border-bottom: 1px solid rgba(46,51,71,.4);
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: background .15s;
+    position: relative;
+  }
+  .cal-hour-cell:hover { background: rgba(124,106,247,.07); }
+  .cal-hour-cell::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: rgba(46,51,71,.25);
+  }
+
+  /* 予約ブロック */
+  .cal-event {
+    position: absolute;
+    left: 3px; right: 3px;
+    border-radius: 8px;
+    padding: 5px 7px;
+    font-size: .7rem;
+    font-weight: 600;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform .15s, box-shadow .15s, filter .15s;
+    z-index: 10;
+    border-left: 3px solid transparent;
+    line-height: 1.4;
+  }
+  .cal-event:hover { transform: translateX(2px) scaleY(1.02); box-shadow: 0 4px 16px rgba(0,0,0,.3); filter: brightness(1.1); z-index: 20; }
+  .cal-event.status-new {
+    background: rgba(251,191,36,.2);
+    border-left-color: var(--yellow);
+    color: var(--yellow);
+  }
+  .cal-event.status-confirmed {
+    background: rgba(124,106,247,.22);
+    border-left-color: var(--accent);
+    color: var(--accent2);
+  }
+  .cal-event.status-done {
+    background: rgba(52,211,153,.15);
+    border-left-color: var(--green);
+    color: var(--green);
+  }
+  .cal-event.status-cancel {
+    background: rgba(248,113,113,.1);
+    border-left-color: var(--red);
+    color: var(--red);
+    opacity: .6;
+    text-decoration: line-through;
+  }
+  .cal-event-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-event-meta { font-size: .63rem; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 現在時刻ライン */
+  .cal-now-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--red), rgba(248,113,113,.3));
+    z-index: 30;
+    pointer-events: none;
+  }
+  .cal-now-line::before {
+    content: '';
+    position: absolute;
+    left: -4px; top: -4px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+  }
+
+  @media (max-width: 700px) {
+    .cal-wrap { height: calc(100vh - 200px); }
+    .cal-week-label { font-size: .75rem; min-width: 120px; }
+  }
+
+  /* ─── Sales Page ─── -->
   .sales-summary-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -768,6 +1001,7 @@
     </div>
     <nav>
       <div class="nav-item active" id="nav-reservations" onclick="showPage('reservations')"><span class="nav-icon">📅</span><span>予約一覧</span></div>
+      <div class="nav-item" id="nav-calendar" onclick="showPage('calendar')"><span class="nav-icon">🗓</span><span>カレンダー</span></div>
       <div class="nav-item" id="nav-sales" onclick="showPage('sales')"><span class="nav-icon">💰</span><span>売上</span></div>
       <div class="nav-item" id="nav-settings" onclick="showPage('settings')"><span class="nav-icon">⚙️</span><span>店舗設定</span></div>
     </nav>
@@ -852,6 +1086,43 @@
           </thead>
           <tbody id="tbody"></tbody>
         </table>
+      </div>
+
+      <!-- ─── カレンダーページ ─── -->
+      <div class="settings-page" id="calendarPage">
+        <!-- ヘッダー：週ナビ -->
+        <div class="cal-page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="cal-week-nav" onclick="changeCalWeek(-1)">‹</button>
+            <span class="cal-week-label" id="calWeekLabel"></span>
+            <button class="cal-week-nav" onclick="changeCalWeek(1)">›</button>
+            <button class="cal-today-btn" onclick="goCalToday()">今週</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="cal-legend"><span class="cal-dot" style="background:var(--yellow)"></span>未確認</span>
+            <span class="cal-legend"><span class="cal-dot" style="background:var(--accent)"></span>確認済</span>
+            <span class="cal-legend"><span class="cal-dot" style="background:var(--green)"></span>完了</span>
+            <span class="cal-legend"><span class="cal-dot" style="background:var(--red)"></span>ｷｬﾝｾﾙ</span>
+          </div>
+        </div>
+
+        <!-- カレンダー本体 -->
+        <div class="cal-wrap">
+          <!-- 日付ヘッダー行 -->
+          <div class="cal-grid-header">
+            <div class="cal-time-gutter"></div>
+            <div class="cal-day-headers" id="calDayHeaders"></div>
+          </div>
+          <!-- スクロール領域 -->
+          <div class="cal-scroll-area" id="calScrollArea">
+            <div class="cal-inner">
+              <!-- 時間軸 -->
+              <div class="cal-time-col" id="calTimeCol"></div>
+              <!-- 日ごとのカラム -->
+              <div class="cal-day-cols" id="calDayCols"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ─── 売上ページ ─── -->
@@ -1308,6 +1579,8 @@ function refresh() {
   if (document.getElementById('salesPage').classList.contains('active')) {
     renderSalesPage(currentSalesTab);
   }
+  // カレンダーページが開いていれば再描画
+  refreshCalendar();
 }
 
 // ─── Stats ───
@@ -1542,6 +1815,7 @@ async function submitAddReservation() {
   btn.disabled = false;
   closeAddModal();
   refresh();
+  refreshCalendar();
 }
 
 
@@ -1573,6 +1847,7 @@ function showPage(page) {
   document.querySelector('.table-wrap').style.display      = 'none';
   document.getElementById('settingsPage').classList.remove('active');
   document.getElementById('salesPage').classList.remove('active');
+  document.getElementById('calendarPage').classList.remove('active');
 
   if (page === 'reservations') {
     document.getElementById('nav-reservations').classList.add('active');
@@ -1582,6 +1857,13 @@ function showPage(page) {
     document.querySelector('.tabs').style.display          = 'flex';
     document.querySelector('.table-wrap').style.display    = 'block';
     document.querySelector('.topbar-title').textContent    = '予約ダッシュボード';
+
+  } else if (page === 'calendar') {
+    document.getElementById('nav-calendar').classList.add('active');
+    document.getElementById('bnav-calendar').classList.add('active');
+    document.getElementById('calendarPage').classList.add('active');
+    document.querySelector('.topbar-title').textContent = 'カレンダー';
+    renderCalendarPage();
 
   } else if (page === 'sales') {
     document.getElementById('nav-sales').classList.add('active');
@@ -1923,6 +2205,166 @@ function renderSalesPage(period) {
   }
 }
 
+// ============================================================
+//  ─── カレンダーページ ───
+// ============================================================
+let calWeekOffset = 0; // 0=今週, -1=先週, +1=来週...
+
+// 今週の月曜日を取得（offsetは週単位）
+function getWeekMonday(offset) {
+  const now  = new Date();
+  const dow  = now.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow; // 月曜起点
+  const mon  = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff + offset * 7);
+  return mon;
+}
+
+function changeCalWeek(dir) {
+  calWeekOffset += dir;
+  renderCalendarPage();
+}
+function goCalToday() {
+  calWeekOffset = 0;
+  renderCalendarPage();
+}
+
+function renderCalendarPage() {
+  const mon  = getWeekMonday(calWeekOffset);
+  const days    = Array.from({length: 7}, (_, i) => {
+    const d = new Date(mon); d.setDate(mon.getDate() + i); return d;
+  });
+  const todayStr2 = fmt(new Date());
+
+  // ── 週ラベル ──
+  const s = days[0], e = days[6];
+  document.getElementById('calWeekLabel').textContent =
+    `${s.getMonth()+1}/${s.getDate()} – ${e.getMonth()+1}/${e.getDate()}`;
+
+  // ── 日付ヘッダー ──
+  const DOW_JP = ['日','月','火','水','木','金','土'];
+  document.getElementById('calDayHeaders').innerHTML = days.map(d => {
+    const ds   = fmt(d);
+    const cls  = [
+      'cal-day-head',
+      ds === todayStr2        ? 'is-today' : '',
+      d.getDay() === 0        ? 'is-sun'   : '',
+      d.getDay() === 6        ? 'is-sat'   : '',
+    ].filter(Boolean).join(' ');
+    return `<div class="${cls}">
+      <div class="dow">${DOW_JP[d.getDay()]}</div>
+      <div class="dom">${d.getDate()}</div>
+    </div>`;
+  }).join('');
+
+  // ── 時間軸 ──
+  const HOURS = Array.from({length: 17}, (_, i) => i + 9); // 9〜25時(翌1時)
+  document.getElementById('calTimeCol').innerHTML = HOURS.map(h =>
+    `<div class="cal-time-slot-label">${h < 24 ? String(h).padStart(2,'0') : '0'+String(h-24).padStart(1,'0')}:00</div>`
+  ).join('');
+
+  // ── 日ごとのカラム ──
+  const colsEl = document.getElementById('calDayCols');
+  colsEl.innerHTML = days.map((d, di) => {
+    const ds      = fmt(d);
+    const isToday = ds === todayStr2;
+    const dayRes  = reservations.filter(r => r.date === ds && r.status !== 'cancel' || r.date === ds && r.status === 'cancel');
+
+    const cells = HOURS.map(h =>
+      `<div class="cal-hour-cell" onclick="calCellClick('${ds}',${h})" data-date="${ds}" data-hour="${h}"></div>`
+    ).join('');
+
+    return `<div class="cal-day-col${isToday ? ' is-today' : ''}" id="calCol_${ds}">${cells}</div>`;
+  }).join('');
+
+  // ── 予約ブロックを配置 ──
+  days.forEach(d => {
+    const ds     = fmt(d);
+    const dayRes = reservations.filter(r => r.date === ds);
+    dayRes.forEach(r => placeCalEvent(r, ds));
+  });
+
+  // ── 現在時刻ライン ──
+  updateNowLine(days);
+
+  // ── 今日が見える位置にスクロール ──
+  const scrollArea = document.getElementById('calScrollArea');
+  const nowH       = new Date().getHours();
+  if (calWeekOffset === 0 && nowH >= 9) {
+    setTimeout(() => {
+      scrollArea.scrollTop = Math.max(0, (nowH - 9 - 1) * 60);
+    }, 50);
+  } else {
+    setTimeout(() => { scrollArea.scrollTop = 0; }, 50);
+  }
+}
+
+function placeCalEvent(r, dateStr) {
+  const col = document.getElementById(`calCol_${dateStr}`);
+  if (!col) return;
+
+  // 時間をパース（例: "10:30"）
+  const [hh, mm] = (r.time || '00:00').split(':').map(Number);
+  if (hh < 9 || hh > 25) return; // 表示範囲外
+
+  const topPx    = (hh - 9) * 60 + mm; // 9時起点でpx
+  const heightPx = 55; // デフォルト高さ
+
+  const el = document.createElement('div');
+  el.className = `cal-event status-${r.status}`;
+  el.style.top    = `${topPx}px`;
+  el.style.height = `${heightPx}px`;
+  el.innerHTML = `
+    <div class="cal-event-name">${r.name}</div>
+    <div class="cal-event-meta">${r.time} ${r.menu}</div>
+  `;
+  el.onclick = (e) => { e.stopPropagation(); openModal(r.id); };
+  col.appendChild(el);
+}
+
+// 現在時刻ラインを表示
+function updateNowLine(days) {
+  // 既存のラインを削除
+  document.querySelectorAll('.cal-now-line').forEach(el => el.remove());
+
+  const now     = new Date();
+  const todayS  = fmt(now);
+  const col     = document.getElementById(`calCol_${todayS}`);
+  if (!col) return;
+
+  const h      = now.getHours();
+  const m      = now.getMinutes();
+  if (h < 9 || h > 25) return;
+
+  const topPx  = (h - 9) * 60 + m;
+  const line   = document.createElement('div');
+  line.className = 'cal-now-line';
+  line.style.top = `${topPx}px`;
+  col.appendChild(line);
+}
+
+// カレンダーのセルクリック → 新規予約モーダルに日時をプリセット
+function calCellClick(dateStr, hour) {
+  const timeStr = `${String(hour).padStart(2,'0')}:00`;
+  // 新規予約モーダルを開いて日時をセット
+  document.getElementById('add_date').value = dateStr;
+  const timeSelect = document.getElementById('add_time');
+  for (let opt of timeSelect.options) {
+    if (opt.value === timeStr || opt.textContent === timeStr) {
+      timeSelect.value = opt.value;
+      break;
+    }
+  }
+  document.getElementById('add_error').style.display = 'none';
+  document.getElementById('addModal').classList.add('show');
+}
+
+// カレンダーを更新（新規追加後など）
+function refreshCalendar() {
+  if (document.getElementById('calendarPage').classList.contains('active')) {
+    renderCalendarPage();
+  }
+}
+
 // ─── 自動リロード（3分ごと・差分取得） ───
 setInterval(syncReservations, 3 * 60 * 1000);
 
@@ -1999,6 +2441,10 @@ loadReservations();
   <div class="bottom-nav-item active" id="bnav-reservations" onclick="showPage('reservations')">
     <span class="bn-icon">📅</span>
     <span>予約一覧</span>
+  </div>
+  <div class="bottom-nav-item" id="bnav-calendar" onclick="showPage('calendar')">
+    <span class="bn-icon">🗓</span>
+    <span>カレンダー</span>
   </div>
   <div class="bottom-nav-item" id="bnav-sales" onclick="showPage('sales')">
     <span class="bn-icon">💰</span>
