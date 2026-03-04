@@ -985,7 +985,21 @@
 //  ★ ここにGoogle Apps ScriptのURLを貼り付けてください ★
 //  （予約ページと同じURLでOKです）
 // ============================================================
-const SHEET_URL = SHOP_CONFIG.sheetUrl; // ← shop-config.js から自動取得
+const SHEET_URL = SHOP_CONFIG.sheetUrl;
+
+// ─── GASへの書き込みリクエスト（no-cors不使用・成否を確認できる） ───
+// POSTデータをBase64エンコードしてGETパラメータで送信する
+async function gasPost(data) {
+  const json    = JSON.stringify(data);
+  // btoa は ASCII のみ対応なので、日本語を含む場合は UTF-8 バイト列に変換してから encode
+  const utf8    = new TextEncoder().encode(json);
+  const b64     = btoa(String.fromCharCode(...utf8));
+  const url     = `${SHEET_URL}?data=${encodeURIComponent(b64)}`;
+  const res     = await fetch(url);                    // 普通のGET → レスポンスが読める
+  const result  = await res.json();
+  if (!result.success) throw new Error(result.error || 'GASエラー');
+  return result;
+} // ← shop-config.js から自動取得
 // ============================================================
 
 // ─── ステータスの正規化（日本語→英語） ───
@@ -1212,35 +1226,29 @@ async function changeStatus(id, newStatus) {
   if (!SHEET_URL.includes('ここにURLを貼り付け')) {
     try {
       if (newStatus === 'confirmed' && r.email) {
-        // 確認済＋メールあり → 確認メール送信
-        await fetch(SHEET_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'confirmAndNotify',
-            reservationId: r.reservationId,   // ← 予約IDで行を特定（行番号ズレなし）
-            reservation: {
-              name:  r.name,  email: r.email,
-              date:  r.date,  time:  r.time,
-              menu:  r.menu,  staff: r.staff,  price: r.price
-            }
-          })
+        await gasPost({
+          action: 'confirmAndNotify',
+          reservationId: r.reservationId,
+          reservation: {
+            name: r.name, email: r.email,
+            date: r.date, time:  r.time,
+            menu: r.menu, staff: r.staff, price: r.price
+          }
         });
       } else {
-        await fetch(SHEET_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'updateStatus',
-            reservationId: r.reservationId,   // ← 予約IDで行を特定（行番号ズレなし）
-            status: newStatus
-          })
+        await gasPost({
+          action: 'updateStatus',
+          reservationId: r.reservationId,
+          status: newStatus
         });
       }
+      // ✅ ここに来たら確実に保存成功
     } catch(e) {
+      // ❌ 保存失敗 → UIを元のステータスに戻す（ロールバック）
       console.error('ステータス更新エラー:', e);
+      r.status = oldStatus;
+      refresh();
+      showToast(`⚠️ 保存失敗：${e.message || 'ネットワークエラー'}。元のステータスに戻しました。`);
     }
   }
 }
@@ -1502,13 +1510,20 @@ async function submitAddReservation() {
   // スプレッドシートに送信
   if (!SHEET_URL.includes('ここにURLを貼り付け')) {
     try {
-      await fetch(SHEET_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    } catch(e) { console.log(e); }
+      const result = await gasPost({ action: 'addReservation', ...payload });
+      // GASから返ってきた正式な予約IDがあれば仮IDを上書き
+      if (result.reservationId) {
+        const pending = reservations.find(r => r.reservationId && r.reservationId.startsWith('PENDING_'));
+        if (pending) pending.reservationId = result.reservationId;
+      }
+    } catch(e) {
+      console.error('新規予約の保存失敗:', e);
+      btn.textContent = '✅ 登録する';
+      btn.disabled = false;
+      document.getElementById('add_error').textContent = `⚠️ 保存に失敗しました：${e.message || 'ネットワークエラー'}`;
+      document.getElementById('add_error').style.display = 'block';
+      return; // ローカル追加もしない
+    }
   }
 
   // ローカルにも追加して即反映（reservationIdは仮値、次回リロードで正式IDに更新される）
@@ -1711,13 +1726,14 @@ async function saveSettings() {
 
   if (!SHEET_URL.includes('ここにURLを貼り付け')) {
     try {
-      await fetch(SHEET_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveSettings', settings })
-      });
-    } catch(e) { console.log(e); }
+      await gasPost({ action: 'saveSettings', settings });
+    } catch(e) {
+      console.error('設定保存失敗:', e);
+      btn.textContent = '💾 設定を保存する';
+      btn.disabled = false;
+      alert(`⚠️ 設定の保存に失敗しました：${e.message || 'ネットワークエラー'}`);
+      return;
+    }
   }
 
   btn.textContent = '💾 設定を保存する';
