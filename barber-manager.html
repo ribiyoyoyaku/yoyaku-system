@@ -2,158 +2,673 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BARBER MANAGER - 理容室予約管理システム</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>BARBER MANAGER</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0f0e0c; font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif; }
-    select option { background: #222018; color: #f0ead6; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #1a1916; }
-    ::-webkit-scrollbar-thumb { background: #2e2b25; border-radius: 3px; }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#0f0e0c;font-family:'Noto Sans JP','Hiragino Sans',sans-serif;}
+    select option{background:#222018;color:#f0ead6;}
+    ::-webkit-scrollbar{width:5px;height:5px;}
+    ::-webkit-scrollbar-track{background:#1a1916;}
+    ::-webkit-scrollbar-thumb{background:#3a3730;border-radius:3px;}
+    input:focus,select:focus,textarea:focus{border-color:#c9a84c !important;outline:none;}
   </style>
 </head>
 <body>
-  <div id="root"></div>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
 
-  <script type="text/babel">
-    const { useState, useEffect, useCallback } = React;
+const T = {
+  bg:"#0f0e0c", surface:"#1a1916", card:"#222018", border:"#2e2b25",
+  accent:"#c9a84c", accentL:"#e0c06a", accentD:"#9a7a30",
+  text:"#f0ead6", muted:"#8a8070", dim:"#5a5448",
+  danger:"#c0392b", success:"#27ae60",
+};
 
-    // ========== GOOGLE SHEETS SYNC ==========
-    // Apps ScriptへはGETパラメータで送信する（最も確実な方法）
-    async function syncToSheets(action, data) {
-      const apiUrl = localStorage.getItem("gs_api_key");
-      if (!apiUrl || !apiUrl.startsWith("http")) return { ok: false, error: "URL未設定" };
+const DEF_MENUS = [
+  {id:1,name:"カット",duration:60,price:3800},
+  {id:2,name:"カット＋シャンプー",duration:60,price:4800},
+  {id:3,name:"シェービング",duration:60,price:2500},
+  {id:4,name:"パーマ",duration:120,price:8000},
+  {id:5,name:"カラー",duration:90,price:6000},
+];
+const DEF_CUSTOMERS = [
+  {id:1,name:"田中 太郎",phone:"090-1234-5678",email:"tanaka@example.com",memo:"常連客"},
+  {id:2,name:"鈴木 一郎",phone:"080-9876-5432",email:"suzuki@example.com",memo:""},
+  {id:3,name:"山田 花子",phone:"070-1111-2222",email:"yamada@example.com",memo:"アレルギーあり"},
+];
+const HOURS = Array.from({length:11},(_,i)=>i+9);
+const DAYS = ["月","火","水","木","金","土","日"];
+const WDAYS = ["日","月","火","水","木","金","土"];
+
+const uid = () => Date.now()+Math.random().toString(36).slice(2);
+const fmtDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const weekOf = base => {
+  const day = base.getDay();
+  const mon = new Date(base);
+  mon.setDate(base.getDate()-((day+6)%7));
+  return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; });
+};
+const ls = (k,def) => { try{ const v=localStorage.getItem(k); return v?JSON.parse(v):def; }catch{ return def; } };
+const lsSet = (k,v) => localStorage.setItem(k,JSON.stringify(v));
+
+async function syncSheets(action, data) {
+  const url = localStorage.getItem("gs_url");
+  if (!url?.startsWith("http")) return;
+  try {
+    const p = new URLSearchParams({action, ...data});
+    await fetch(`${url}?${p}`, {method:"GET", mode:"no-cors"});
+  } catch {}
+}
+
+// スタイル
+const inp = (extra={}) => ({width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 14px",color:T.text,fontSize:14,marginBottom:12,boxSizing:"border-box",fontFamily:"inherit",...extra});
+const btn1 = (extra={}) => ({background:T.accent,color:"#000",border:"none",borderRadius:8,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontSize:13,fontFamily:"inherit",whiteSpace:"nowrap",...extra});
+const btn2 = (extra={}) => ({background:"transparent",color:T.muted,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 20px",fontWeight:600,cursor:"pointer",fontSize:13,fontFamily:"inherit",...extra});
+const btnS = (extra={}) => ({background:T.card,color:T.text,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:13,fontFamily:"inherit",...extra});
+const lbl = {display:"block",color:T.muted,fontSize:12,marginBottom:6,fontWeight:600};
+const OVL = {position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,backdropFilter:"blur(4px)",padding:16};
+const MDL = {background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:24,width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto"};
+
+// ══════════════════════════════════════
+// 予約モーダル（重複チェック付き）
+// ══════════════════════════════════════
+function RsvModal({slot, customers, menus, reservations, onSave, onClose, onDelete, existing}) {
+  const [name, setName] = useState(existing?.customerName||"");
+  const [menuId, setMenuId] = useState(String(existing?.menuId||""));
+  const [seat, setSeat] = useState(existing?.seat||1);
+  const [note, setNote] = useState(existing?.note||"");
+  const [sugg, setSugg] = useState([]);
+  const menu = menus.find(m=>m.id===Number(menuId));
+
+  // 重複チェック
+  const conflict = reservations.find(r=>
+    r.date===slot.date && r.hour===slot.hour && r.seat===seat &&
+    (!existing || r.id!==existing.id)
+  );
+
+  const onNameChange = v => {
+    setName(v);
+    setSugg(v.trim() ? customers.filter(c=>c.name.includes(v)).slice(0,5) : []);
+  };
+
+  const handleSave = () => {
+    if(!name.trim()||!menuId||conflict) return;
+    const rsv = {
+      id:existing?.id||uid(), date:slot.date, hour:slot.hour, seat,
+      customerName:name.trim(), menuId:Number(menuId),
+      menuName:menu?.name, price:menu?.price, note
+    };
+    syncSheets(existing?"edit":"add", rsv);
+    onSave(rsv);
+  };
+
+  const handleDelete = () => {
+    syncSheets("delete", {
+      date:existing.date, hour:existing.hour, seat:existing.seat,
+      customerName:existing.customerName, menuName:existing.menuName,
+      price:existing.price, note:"【削除】"
+    });
+    onDelete(existing.id);
+  };
+
+  return (
+    <div style={OVL} onClick={onClose}>
+      <div style={MDL} onClick={e=>e.stopPropagation()}>
+        <h2 style={{color:T.text,fontSize:17,fontWeight:800,marginBottom:14,marginTop:0}}>
+          {existing?"✏️ 予約を編集":"➕ 新規予約"}
+        </h2>
+        <p style={{color:T.accent,fontSize:13,marginBottom:16}}>
+          📅 {slot.date}　⏰ {slot.hour}:00
+        </p>
+
+        {/* 席 */}
+        <label style={lbl}>席を選択</label>
+        <div style={{display:"flex",gap:10,marginBottom:14}}>
+          {[1,2].map(s=>(
+            <button key={s} onClick={()=>setSeat(s)}
+              style={btnS({flex:1,...(seat===s?{background:T.accent,color:"#000",border:`1px solid ${T.accent}`}:{})})}>
+              席 {s}
+            </button>
+          ))}
+        </div>
+
+        {/* 重複警告 */}
+        {conflict && (
+          <div style={{background:"#2a1800",border:`1px solid ${T.accent}`,borderRadius:8,padding:"10px 14px",marginBottom:12}}>
+            <p style={{color:T.accentL,fontSize:13,margin:0}}>
+              ⚠️ 席{seat}は <strong>{conflict.customerName}</strong> さんが既に予約中です
+            </p>
+          </div>
+        )}
+
+        {/* 顧客名 */}
+        <label style={lbl}>お客様名</label>
+        <div style={{position:"relative",marginBottom:12}}>
+          <input style={inp({marginBottom:0})} value={name}
+            onChange={e=>onNameChange(e.target.value)}
+            placeholder="名前を入力（候補が出ます）" autoComplete="off"/>
+          {sugg.length>0 && (
+            <div style={{position:"absolute",top:"calc(100% + 2px)",left:0,right:0,background:T.card,border:`1px solid ${T.accent}`,borderRadius:8,zIndex:10,overflow:"hidden",boxShadow:"0 6px 24px rgba(0,0,0,0.6)"}}>
+              {sugg.map(c=>(
+                <div key={c.id}
+                  onClick={()=>{setName(c.name);setSugg([]);}}
+                  style={{padding:"9px 14px",cursor:"pointer",color:T.text,fontSize:13,borderBottom:`1px solid ${T.border}`}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#2a2820"}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  {c.name}
+                  <span style={{color:T.muted,fontSize:11,marginLeft:8}}>{c.phone}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* メニュー */}
+        <label style={lbl}>メニュー</label>
+        <select style={inp({cursor:"pointer"})} value={menuId} onChange={e=>setMenuId(e.target.value)}>
+          <option value="">選択してください</option>
+          {menus.map(m=><option key={m.id} value={m.id}>{m.name}　¥{m.price.toLocaleString()}</option>)}
+        </select>
+        {menu && (
+          <div style={{background:"#1a2030",border:"1px solid #2a3a5a",borderRadius:8,padding:"8px 12px",marginBottom:12}}>
+            <p style={{color:"#7ab8f5",fontSize:12,margin:0}}>
+              ⏱ {menu.duration}分　　💴 ¥{menu.price.toLocaleString()}
+            </p>
+          </div>
+        )}
+
+        {/* メモ */}
+        <label style={lbl}>メモ</label>
+        <textarea style={inp({height:65,resize:"vertical"})} value={note}
+          onChange={e=>setNote(e.target.value)} placeholder="備考など"/>
+
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+          {existing && (
+            <button style={btn2({color:T.danger,borderColor:T.danger})} onClick={handleDelete}>削除</button>
+          )}
+          <div style={{flex:1}}/>
+          <button style={btn2()} onClick={onClose}>キャンセル</button>
+          <button
+            style={btn1({opacity:(!name.trim()||!menuId||conflict)?0.45:1})}
+            onClick={handleSave}
+            disabled={!name.trim()||!menuId||!!conflict}>
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+// カレンダー（スマホは1日表示）
+// ══════════════════════════════════════
+function CalendarView({reservations, customers, menus, onAdd, onEdit}) {
+  const [base, setBase] = useState(new Date());
+  const [modal, setModal] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth<=640);
+
+  useEffect(()=>{
+    const h = ()=>setIsMobile(window.innerWidth<=640);
+    window.addEventListener("resize",h);
+    return ()=>window.removeEventListener("resize",h);
+  },[]);
+
+  const todayStr = fmtDate(new Date());
+  const week = weekOf(base);
+  const viewDates = isMobile ? [base] : week;
+
+  const getRsvs = (date,hour) => {
+    const ds = fmtDate(date);
+    return reservations.filter(r=>r.date===ds&&r.hour===hour);
+  };
+
+  const handleCell = (date,hour,seat) => {
+    const ds = fmtDate(date);
+    const existing = reservations.find(r=>r.date===ds&&r.hour===hour&&r.seat===seat);
+    setModal({slot:{date:ds,hour},existing});
+  };
+
+  const handleSave = r => { modal?.existing ? onEdit(r) : onAdd(r); setModal(null); };
+  const handleDelete = id => { onEdit({__delete:true,id}); setModal(null); };
+
+  const move = n => {
+    const d = new Date(base);
+    isMobile ? d.setDate(d.getDate()+n) : d.setDate(d.getDate()+n*7);
+    setBase(d);
+  };
+
+  const headerLabel = isMobile
+    ? `${base.getFullYear()}年${base.getMonth()+1}月${base.getDate()}日（${WDAYS[base.getDay()]}）`
+    : `${week[0].getFullYear()}年${week[0].getMonth()+1}月${week[0].getDate()}日 〜 ${week[6].getMonth()+1}月${week[6].getDate()}日`;
+
+  return (
+    <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+      {/* ナビ */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        <button style={btnS()} onClick={()=>move(-1)}>‹</button>
+        <button style={btnS({fontSize:12,padding:"6px 12px"})} onClick={()=>setBase(new Date())}>今日</button>
+        <button style={btnS()} onClick={()=>move(1)}>›</button>
+        <span style={{color:T.text,fontWeight:700,fontSize:isMobile?13:15}}>{headerLabel}</span>
+        {isMobile && (
+          <button style={btnS({fontSize:11,padding:"5px 10px",marginLeft:"auto"})}
+            onClick={()=>{const d=new Date();setBase(d);}}>
+            週表示へ →
+          </button>
+        )}
+      </div>
+
+      {/* グリッド */}
+      <div style={{flex:1,overflow:"auto",borderRadius:10,border:`1px solid ${T.border}`}}>
+        <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed",minWidth:isMobile?260:480}}>
+          <thead>
+            <tr>
+              <th style={{width:44,padding:"7px 4px",textAlign:"center",color:T.muted,fontSize:11,fontWeight:600,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,left:0,zIndex:3,background:T.surface}}>時</th>
+              {viewDates.map((d,i)=>{
+                const isT = fmtDate(d)===todayStr;
+                const wd = d.getDay();
+                const dayIdx = isMobile ? (wd+6)%7 : i;
+                return (
+                  <th key={i} style={{
+                    padding:"6px 4px",textAlign:"center",
+                    position:"sticky",top:0,zIndex:2,background:T.surface,
+                    borderBottom:isT?`2px solid ${T.accent}`:`1px solid ${T.border}`,
+                    color:isT?T.accent:(wd===0||wd===6?"#e88":T.text)
+                  }}>
+                    <div style={{fontSize:10,color:T.muted}}>{DAYS[dayIdx]}</div>
+                    <div style={{fontSize:15,fontWeight:700}}>{d.getDate()}</div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {HOURS.map(hour=>(
+              <tr key={hour}>
+                <td style={{
+                  textAlign:"center",fontSize:11,color:T.muted,fontWeight:600,
+                  background:T.surface,position:"sticky",left:0,zIndex:1,
+                  padding:"0 4px",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"
+                }}>{hour}:00</td>
+                {viewDates.map((d,di)=>{
+                  const rsvs = getRsvs(d,hour);
+                  const s1 = rsvs.find(r=>r.seat===1);
+                  const s2 = rsvs.find(r=>r.seat===2);
+                  const isT = fmtDate(d)===todayStr;
+                  return (
+                    <td key={di} style={{
+                      padding:2,verticalAlign:"top",
+                      background:isT?"#191a12":"transparent",
+                      borderBottom:`1px solid ${T.border}`
+                    }}>
+                      <div style={{display:"flex",gap:2,height:isMobile?42:50}}>
+                        {[{seat:1,rsv:s1},{seat:2,rsv:s2}].map(({seat,rsv})=>(
+                          <div key={seat}
+                            onClick={()=>handleCell(d,hour,seat)}
+                            style={{
+                              flex:1,borderRadius:4,cursor:"pointer",
+                              transition:"background 0.12s",
+                              background:rsv?`${T.accentD}cc`:"transparent",
+                              border:rsv?`1px solid ${T.accent}`:`1px dashed ${T.border}`,
+                              padding:"2px 3px",overflow:"hidden",
+                              display:"flex",flexDirection:"column",justifyContent:"center"
+                            }}
+                            onMouseEnter={e=>{if(!rsv)e.currentTarget.style.background="#252218";}}
+                            onMouseLeave={e=>{if(!rsv)e.currentTarget.style.background="transparent";}}>
+                            {rsv ? (
+                              <>
+                                <div style={{fontSize:isMobile?9:10,color:T.accentL,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rsv.customerName}</div>
+                                <div style={{fontSize:9,color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rsv.menuName}</div>
+                              </>
+                            ) : (
+                              <div style={{fontSize:9,color:T.dim,textAlign:"center"}}>席{seat}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {modal && (
+        <RsvModal
+          slot={modal.slot} customers={customers} menus={menus}
+          reservations={reservations} existing={modal.existing}
+          onSave={handleSave} onClose={()=>setModal(null)} onDelete={handleDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+// 顧客リスト
+// ══════════════════════════════════════
+function CustomerModal({customer, onSave, onClose}) {
+  const [f, setF] = useState(customer||{name:"",phone:"",email:"",memo:""});
+  const s = (k,v) => setF(p=>({...p,[k]:v}));
+  return (
+    <div style={OVL} onClick={onClose}>
+      <div style={MDL} onClick={e=>e.stopPropagation()}>
+        <h2 style={{color:T.text,fontSize:17,fontWeight:800,marginBottom:16,marginTop:0}}>{customer?"顧客を編集":"新規顧客登録"}</h2>
+        <label style={lbl}>お名前 *</label>
+        <input style={inp()} value={f.name} onChange={e=>s("name",e.target.value)} placeholder="田中 太郎"/>
+        <label style={lbl}>電話番号</label>
+        <input style={inp()} value={f.phone} onChange={e=>s("phone",e.target.value)} placeholder="090-0000-0000"/>
+        <label style={lbl}>メールアドレス</label>
+        <input style={inp()} value={f.email} onChange={e=>s("email",e.target.value)} placeholder="email@example.com"/>
+        <label style={lbl}>メモ</label>
+        <textarea style={inp({height:65,resize:"vertical"})} value={f.memo} onChange={e=>s("memo",e.target.value)}/>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+          <button style={btn2()} onClick={onClose}>キャンセル</button>
+          <button style={btn1()} onClick={()=>onSave({...f,id:customer?.id||uid()})} disabled={!f.name}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomerListView({customers, reservations, onAdd, onEdit, onDelete}) {
+  const [q, setQ] = useState("");
+  const [modal, setModal] = useState(null);
+  const list = customers.filter(c=>c.name.includes(q)||c.phone.includes(q)||c.email.includes(q));
+  const visits = id => reservations.filter(r=>r.customerName===customers.find(c=>c.id===id)?.name).length;
+  const spent = id => reservations.filter(r=>r.customerName===customers.find(c=>c.id===id)?.name).reduce((s,r)=>s+(r.price||0),0);
+  return (
+    <div style={{flex:1}}>
+      <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <input style={inp({flex:1,minWidth:160,marginBottom:0})} placeholder="🔍 名前・電話・メールで検索" value={q} onChange={e=>setQ(e.target.value)}/>
+        <button style={btn1()} onClick={()=>setModal({mode:"new"})}>＋ 新規登録</button>
+      </div>
+      <div style={{overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead>
+            <tr>
+              {["名前","電話番号","メール","来店","累計","メモ","操作"].map(h=>(
+                <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.muted,fontSize:11,fontWeight:600,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(c=>(
+              <tr key={c.id} style={{borderBottom:`1px solid ${T.border}`}}
+                onMouseEnter={e=>e.currentTarget.style.background="#1e1c18"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <td style={{padding:"9px 10px",color:T.text,fontWeight:600}}>{c.name}</td>
+                <td style={{padding:"9px 10px",color:T.muted}}>{c.phone}</td>
+                <td style={{padding:"9px 10px",color:T.muted,fontSize:12}}>{c.email}</td>
+                <td style={{padding:"9px 10px",color:T.accent,fontWeight:700,textAlign:"center"}}>{visits(c.id)}回</td>
+                <td style={{padding:"9px 10px",color:T.accentL,fontWeight:700,textAlign:"right"}}>¥{spent(c.id).toLocaleString()}</td>
+                <td style={{padding:"9px 10px",color:T.muted,fontSize:12}}>{c.memo}</td>
+                <td style={{padding:"9px 10px"}}>
+                  <div style={{display:"flex",gap:6}}>
+                    <button style={btnS({fontSize:12,padding:"4px 10px"})} onClick={()=>setModal({mode:"edit",customer:c})}>編集</button>
+                    <button style={btnS({fontSize:12,padding:"4px 10px",color:T.danger})} onClick={()=>onDelete(c.id)}>削除</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {modal && (
+        <CustomerModal
+          customer={modal.mode==="edit"?modal.customer:null}
+          onSave={c=>{modal.mode==="edit"?onEdit(c):onAdd(c);setModal(null);}}
+          onClose={()=>setModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+// メニュー設定
+// ══════════════════════════════════════
+function MenuModal({menu, onSave, onClose}) {
+  const [f, setF] = useState(menu||{name:"",duration:60,price:0});
+  const s = (k,v) => setF(p=>({...p,[k]:v}));
+  return (
+    <div style={OVL} onClick={onClose}>
+      <div style={MDL} onClick={e=>e.stopPropagation()}>
+        <h2 style={{color:T.text,fontSize:17,fontWeight:800,marginBottom:16,marginTop:0}}>{menu?"メニューを編集":"新規メニュー"}</h2>
+        <label style={lbl}>メニュー名 *</label>
+        <input style={inp()} value={f.name} onChange={e=>s("name",e.target.value)} placeholder="カット"/>
+        <label style={lbl}>所要時間（分）</label>
+        <input style={inp()} type="number" value={f.duration} onChange={e=>s("duration",Number(e.target.value))}/>
+        <label style={lbl}>料金（円）</label>
+        <input style={inp()} type="number" value={f.price} onChange={e=>s("price",Number(e.target.value))}/>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+          <button style={btn2()} onClick={onClose}>キャンセル</button>
+          <button style={btn1()} onClick={()=>onSave({...f,id:menu?.id||uid()})} disabled={!f.name}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MenuView({menus, onAdd, onEdit, onDelete}) {
+  const [modal, setModal] = useState(null);
+  return (
+    <div style={{flex:1}}>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:14}}>
+        <button style={btn1()} onClick={()=>setModal({mode:"new"})}>＋ メニュー追加</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:12}}>
+        {menus.map(m=>(
+          <div key={m.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700,color:T.text,marginBottom:4}}>{m.name}</div>
+                <div style={{fontSize:12,color:T.muted}}>⏱ {m.duration}分</div>
+              </div>
+              <div style={{fontSize:20,fontWeight:800,color:T.accent}}>¥{m.price.toLocaleString()}</div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button style={btnS({flex:1,fontSize:12})} onClick={()=>setModal({mode:"edit",menu:m})}>編集</button>
+              <button style={btnS({flex:1,fontSize:12,color:T.danger})} onClick={()=>onDelete(m.id)}>削除</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {modal && (
+        <MenuModal
+          menu={modal.mode==="edit"?modal.menu:null}
+          onSave={m=>{modal.mode==="edit"?onEdit(m):onAdd(m);setModal(null);}}
+          onClose={()=>setModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+// 売上管理
+// ══════════════════════════════════════
+function SalesView({reservations, menus}) {
+  const [period, setPeriod] = useState("month");
+  const [month, setMonth] = useState(()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;});
+  const filtered = reservations.filter(r=>{
+    if(period==="month") return r.date?.startsWith(month);
+    if(period==="today") return r.date===fmtDate(new Date());
+    return true;
+  });
+  const total = filtered.reduce((s,r)=>s+(r.price||0),0);
+  const cnt = filtered.length;
+  const mStats = menus.map(m=>{
+    const rs=filtered.filter(r=>r.menuId===m.id);
+    return {...m,cnt:rs.length,tot:rs.reduce((s,r)=>s+(r.price||0),0)};
+  }).filter(m=>m.cnt>0).sort((a,b)=>b.tot-a.tot);
+  const daily={};
+  filtered.forEach(r=>{daily[r.date]=(daily[r.date]||0)+(r.price||0);});
+  const dE=Object.entries(daily).sort(([a],[b])=>a.localeCompare(b));
+  const maxD=Math.max(...dE.map(([,v])=>v),1);
+  const csv=()=>{
+    const h="日付,時間,席,顧客名,メニュー,金額,メモ";
+    const rows=filtered.map(r=>`${r.date},${r.hour}:00,${r.seat},${r.customerName||""},${r.menuName||""},${r.price||0},${r.note||""}`);
+    const b=new Blob(["\uFEFF"+[h,...rows].join("\n")],{type:"text/csv;charset=utf-8;"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`売上_${month}.csv`;a.click();
+  };
+  return (
+    <div style={{flex:1,overflowY:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {[["today","今日"],["month","月別"],["all","全期間"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setPeriod(v)}
+            style={btnS({...(period===v?{background:T.accent,color:"#000",border:`1px solid ${T.accent}`}:{})})}>
+            {l}
+          </button>
+        ))}
+        {period==="month"&&(
+          <input type="month" value={month} onChange={e=>setMonth(e.target.value)}
+            style={inp({marginBottom:0,width:"auto",padding:"7px 12px"})}/>
+        )}
+        <div style={{flex:1}}/>
+        <button style={btn1()} onClick={csv}>📥 CSV</button>
+      </div>
+
+      {/* KPI */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12,marginBottom:18}}>
+        {[["売上合計",`¥${total.toLocaleString()}`],["予約件数",`${cnt}件`],["客単価",`¥${cnt>0?Math.round(total/cnt).toLocaleString():0}`]].map(([k,v])=>(
+          <div key={k} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+            <div style={{color:T.muted,fontSize:12,marginBottom:5,fontWeight:600}}>{k}</div>
+            <div style={{color:T.accent,fontSize:22,fontWeight:800}}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14,marginBottom:14}}>
+        {/* メニュー別 */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:16}}>
+          <h3 style={{color:T.text,fontSize:13,fontWeight:700,marginBottom:12}}>メニュー別売上</h3>
+          {mStats.length===0?<p style={{color:T.muted,fontSize:13}}>データなし</p>:mStats.map(m=>(
+            <div key={m.id} style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                <span style={{color:T.text,fontSize:12}}>{m.name} <span style={{color:T.muted}}>×{m.cnt}</span></span>
+                <span style={{color:T.accentL,fontWeight:700,fontSize:12}}>¥{m.tot.toLocaleString()}</span>
+              </div>
+              <div style={{background:T.border,borderRadius:3,height:5}}>
+                <div style={{background:T.accent,height:5,borderRadius:3,width:`${(m.tot/total)*100}%`,transition:"width 0.5s"}}/>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* 日別 */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:16}}>
+          <h3 style={{color:T.text,fontSize:13,fontWeight:700,marginBottom:12}}>日別売上</h3>
+          {dE.length===0?<p style={{color:T.muted,fontSize:13}}>データなし</p>:(
+            <div style={{display:"flex",alignItems:"flex-end",gap:3,height:110,overflow:"auto"}}>
+              {dE.map(([date,val])=>(
+                <div key={date} style={{flex:1,minWidth:18,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                  <div style={{width:"100%",background:T.accent,borderRadius:"3px 3px 0 0",height:`${(val/maxD)*100}px`,minHeight:4,transition:"height 0.4s"}} title={`¥${val.toLocaleString()}`}/>
+                  <div style={{fontSize:8,color:T.muted,writingMode:"vertical-rl",height:26}}>{date.slice(5)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 一覧表 */}
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:16}}>
+        <h3 style={{color:T.text,fontSize:13,fontWeight:700,marginBottom:12}}>予約一覧</h3>
+        <div style={{overflow:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr>{["日付","時間","席","顧客名","メニュー","金額","メモ"].map(h=>(
+                <th key={h} style={{padding:"6px 8px",textAlign:"left",color:T.muted,fontSize:11,fontWeight:600,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {[...filtered].sort((a,b)=>(b.date+String(b.hour)).localeCompare(a.date+String(a.hour))).map(r=>(
+                <tr key={r.id} style={{borderBottom:`1px solid ${T.border}`}}>
+                  <td style={{padding:"7px 8px",color:T.muted}}>{r.date}</td>
+                  <td style={{padding:"7px 8px",color:T.muted}}>{r.hour}:00</td>
+                  <td style={{padding:"7px 8px",color:T.muted,textAlign:"center"}}>席{r.seat}</td>
+                  <td style={{padding:"7px 8px",color:T.text,fontWeight:600}}>{r.customerName}</td>
+                  <td style={{padding:"7px 8px",color:T.muted}}>{r.menuName}</td>
+                  <td style={{padding:"7px 8px",color:T.accentL,fontWeight:700,textAlign:"right"}}>¥{(r.price||0).toLocaleString()}</td>
+                  <td style={{padding:"7px 8px",color:T.muted}}>{r.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+// データ管理モーダル（バックアップ＋Sheets）
+// ══════════════════════════════════════
+function DataModal({reservations, customers, menus, onRestore, onClose}) {
+  const [tab, setTab] = useState("backup");
+  const [gsUrl, setGsUrl] = useState(localStorage.getItem("gs_url")||"");
+  const [gsStatus, setGsStatus] = useState({msg:"",ok:true});
+  const [testing, setTesting] = useState(false);
+  const fileRef = useRef();
+
+  const exportJSON = () => {
+    const data = {reservations, customers, menus, exportedAt:new Date().toISOString()};
+    const b = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const a = document.createElement("a");
+    a.href=URL.createObjectURL(b);
+    a.download=`barber_backup_${fmtDate(new Date())}.json`;
+    a.click();
+  };
+
+  const importJSON = e => {
+    const file = e.target.files[0]; if(!file) return;
+    const r = new FileReader();
+    r.onload = ev => {
       try {
-        const params = new URLSearchParams({
-          action,
-          date: data.date || "",
-          hour: data.hour || "",
-          seat: data.seat || "",
-          customerName: data.customerName || "",
-          menuName: data.menuName || "",
-          price: data.price || 0,
-          note: data.note || "",
-        });
-        const url = `${apiUrl}?${params.toString()}`;
-        // GETリクエスト + no-cors → Apps ScriptのdoGet()で受信
-        await fetch(url, { method: "GET", mode: "no-cors" });
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e.message };
-      }
-    }
-
-    const theme = {
-      bg: "#0f0e0c", surface: "#1a1916", card: "#222018", border: "#2e2b25",
-      accent: "#c9a84c", accentLight: "#e0c06a", accentDark: "#9a7a30",
-      text: "#f0ead6", textMuted: "#8a8070", textDim: "#5a5448",
-      danger: "#c0392b", success: "#27ae60", info: "#2980b9",
+        const d = JSON.parse(ev.target.result);
+        if(d.reservations && d.customers && d.menus) {
+          if(confirm(`バックアップを復元しますか？\n予約:${d.reservations.length}件 顧客:${d.customers.length}件\n※現在のデータは上書きされます`)) {
+            onRestore(d);
+            alert("✅ 復元しました");
+          }
+        } else { alert("❌ 正しいバックアップファイルではありません"); }
+      } catch { alert("❌ 読み込みに失敗しました"); }
     };
+    r.readAsText(file);
+    e.target.value="";
+  };
 
-    const INITIAL_MENUS = [
-      { id: 1, name: "カット", duration: 60, price: 3800 },
-      { id: 2, name: "カット＋シャンプー", duration: 60, price: 4800 },
-      { id: 3, name: "シェービング", duration: 60, price: 2500 },
-      { id: 4, name: "パーマ", duration: 120, price: 8000 },
-      { id: 5, name: "カラー", duration: 90, price: 6000 },
-    ];
+  const saveUrl = () => {
+    if(!gsUrl.startsWith("http")) { setGsStatus({msg:"URLを正しく入力してください",ok:false}); return; }
+    localStorage.setItem("gs_url", gsUrl);
+    setGsStatus({msg:"✅ 保存しました",ok:true});
+  };
 
-    const INITIAL_CUSTOMERS = [
-      { id: 1, name: "田中 太郎", phone: "090-1234-5678", email: "tanaka@example.com", memo: "常連客" },
-      { id: 2, name: "鈴木 一郎", phone: "080-9876-5432", email: "suzuki@example.com", memo: "" },
-      { id: 3, name: "山田 花子", phone: "070-1111-2222", email: "yamada@example.com", memo: "アレルギーあり" },
-    ];
+  const testGs = async () => {
+    if(!gsUrl.startsWith("http")) { setGsStatus({msg:"URLを入力してください",ok:false}); return; }
+    setTesting(true);
+    localStorage.setItem("gs_url", gsUrl);
+    setGsStatus({msg:"🔄 送信中...",ok:true});
+    await syncSheets("test",{date:fmtDate(new Date()),hour:0,seat:0,customerName:"接続テスト",menuName:"テスト",price:0,note:"この行は削除してください"});
+    setTesting(false);
+    setGsStatus({msg:"✅ 送信しました。Sheet1 を確認してください",ok:true});
+  };
 
-    const HOURS = Array.from({ length: 11 }, (_, i) => i + 9);
-    const DAY_NAMES = ["月", "火", "水", "木", "金", "土", "日"];
-
-    function generateId() { return Date.now() + Math.random().toString(36).slice(2); }
-    function formatDate(date) {
-      return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
-    }
-    function getWeekDates(base) {
-      const day = base.getDay();
-      const monday = new Date(base);
-      monday.setDate(base.getDate() - ((day + 6) % 7));
-      return Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(monday); d.setDate(monday.getDate() + i); return d;
-      });
-    }
-
-    const S = {
-      th: { padding:"10px 12px", textAlign:"left", color:theme.textMuted, fontSize:12, fontWeight:600, borderBottom:`1px solid ${theme.border}`, whiteSpace:"nowrap" },
-      td: { padding:"10px 12px", color:theme.textMuted, fontSize:13 },
-      input: { width:"100%", background:theme.card, border:`1px solid ${theme.border}`, borderRadius:8, padding:"10px 14px", color:theme.text, fontSize:14, marginBottom:12, boxSizing:"border-box", outline:"none", fontFamily:"inherit" },
-      select: { width:"100%", background:theme.card, border:`1px solid ${theme.border}`, borderRadius:8, padding:"10px 14px", color:theme.text, fontSize:14, marginBottom:12, boxSizing:"border-box", outline:"none", fontFamily:"inherit", cursor:"pointer" },
-      label: { display:"block", color:theme.textMuted, fontSize:12, marginBottom:6, fontWeight:600, letterSpacing:"0.05em" },
-      btnPrimary: { background:theme.accent, color:"#000", border:"none", borderRadius:8, padding:"10px 20px", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"inherit", whiteSpace:"nowrap" },
-      btnSecondary: { background:"transparent", color:theme.textMuted, border:`1px solid ${theme.border}`, borderRadius:8, padding:"10px 20px", fontWeight:600, cursor:"pointer", fontSize:13, fontFamily:"inherit" },
-      navBtn: { background:theme.card, color:theme.text, border:`1px solid ${theme.border}`, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontSize:14, fontFamily:"inherit" },
-      actionBtn: { background:theme.card, color:theme.textMuted, border:`1px solid ${theme.border}`, borderRadius:6, padding:"5px 12px", cursor:"pointer", fontSize:12, fontFamily:"inherit" },
-      seatBtn: { flex:1, background:theme.card, color:theme.textMuted, border:`1px solid ${theme.border}`, borderRadius:8, padding:"8px", cursor:"pointer", fontSize:13, fontFamily:"inherit" },
-      seatBtnActive: { background:theme.accent, color:"#000", border:`1px solid ${theme.accent}` },
-      overlay: { position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, backdropFilter:"blur(4px)" },
-      modal: { background:theme.surface, border:`1px solid ${theme.border}`, borderRadius:14, padding:28, width:"min(95vw,460px)", maxHeight:"90vh", overflowY:"auto" },
-      modalTitle: { color:theme.text, fontSize:18, fontWeight:800, marginBottom:18, marginTop:0 },
-      btnRow: { display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 },
-      menuCard: { background:theme.card, border:`1px solid ${theme.border}`, borderRadius:12, padding:18 },
-      kpiCard: { background:theme.card, border:`1px solid ${theme.border}`, borderRadius:12, padding:"16px 20px" },
-      kpiLabel: { color:theme.textMuted, fontSize:12, marginBottom:6, fontWeight:600 },
-      kpiValue: { color:theme.accent, fontSize:26, fontWeight:800 },
-      card: { background:theme.card, border:`1px solid ${theme.border}`, borderRadius:12, padding:20 },
-      cardTitle: { color:theme.text, fontSize:14, fontWeight:700, marginTop:0, marginBottom:16 },
-    };
-
-    // ========== GOOGLE SHEETS MODAL ==========
-    function GoogleSheetsModal({ onClose }) {
-      const [apiUrl, setApiUrl] = useState(localStorage.getItem("gs_api_key") || "");
-      const [status, setStatus] = useState({ msg:"", ok:true });
-      const [testing, setTesting] = useState(false);
-
-      const save = () => {
-        if (!apiUrl.startsWith("http")) { setStatus({msg:"URLを正しく入力してください", ok:false}); return; }
-        localStorage.setItem("gs_api_key", apiUrl);
-        setStatus({msg:"✅ URLを保存しました", ok:true});
-      };
-
-      const testConnection = async () => {
-        if (!apiUrl.startsWith("http")) { setStatus({msg:"先にURLを入力してください", ok:false}); return; }
-        setTesting(true);
-        setStatus({msg:"🔄 接続テスト中...", ok:true});
-        localStorage.setItem("gs_api_key", apiUrl);
-        const result = await syncToSheets("test", {
-          date: "テスト", hour: "--", seat: 0,
-          customerName: "接続テスト", menuName: "テスト", price: 0, note: "この行は削除してください"
-        });
-        setTesting(false);
-        if (result.ok) {
-          setStatus({msg:"✅ 送信成功！スプレッドシートを確認してください", ok:true});
-        } else {
-          setStatus({msg:`❌ エラー: ${result.error}`, ok:false});
-        }
-      };
-
-      const scriptCode = `// ================================
-// Barber Manager - Apps Script
-// スプレッドシートに貼り付けて保存後、
-// 「デプロイ」→「新しいデプロイ」
-// 種類：ウェブアプリ
-// アクセス：全員
-// ================================
-const SHEET_NAME = "Sheet1";
+  const scriptCode =
+`const SHEET_NAME = "Sheet1";
 
 function doGet(e) {
   try {
     const p = e.parameter;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // シートがなければ自動作成
     let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_NAME);
@@ -161,567 +676,205 @@ function doGet(e) {
       sheet.getRange(1,1,1,8).setFontWeight("bold");
       sheet.setFrozenRows(1);
     }
-
     if (p.action === "delete") {
-      // 一致する行を削除
       const data = sheet.getDataRange().getValues();
-      for (let i = data.length - 1; i >= 1; i--) {
-        if (
-          data[i][0] == p.date &&
-          data[i][3] == p.customerName &&
-          String(data[i][1]).replace(":00","") == String(p.hour)
-        ) {
-          sheet.deleteRow(i + 1);
-          break;
+      for (let i = data.length-1; i >= 1; i--) {
+        if (data[i][0]==p.date && data[i][3]==p.customerName
+            && String(data[i][1]).replace(":00","")==String(p.hour)) {
+          sheet.deleteRow(i+1); break;
         }
       }
     } else {
       sheet.appendRow([
-        p.date        || "",
-        (p.hour || "") + ":00",
-        "席" + (p.seat || ""),
-        p.customerName || "",
-        p.menuName     || "",
-        Number(p.price) || 0,
-        p.note         || "",
+        p.date||"", (p.hour||"")+":00", "席"+(p.seat||""),
+        p.customerName||"", p.menuName||"",
+        Number(p.price)||0, p.note||"",
         new Date().toLocaleString("ja-JP")
       ]);
     }
-
     return ContentService
-      .createTextOutput(JSON.stringify({ ok: true }))
+      .createTextOutput(JSON.stringify({ok:true}))
       .setMimeType(ContentService.MimeType.JSON);
-
   } catch(err) {
     return ContentService
-      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .createTextOutput(JSON.stringify({ok:false,error:err.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }`;
 
-      return (
-        <div style={S.overlay} onClick={onClose}>
-          <div style={{...S.modal, maxWidth:580}} onClick={e=>e.stopPropagation()}>
-            <h2 style={S.modalTitle}>📊 Google スプレッドシート連携</h2>
+  return (
+    <div style={OVL} onClick={onClose}>
+      <div style={{...MDL,maxWidth:520}} onClick={e=>e.stopPropagation()}>
+        <h2 style={{color:T.text,fontSize:17,fontWeight:800,marginBottom:14,marginTop:0}}>⚙️ データ管理</h2>
 
-            {/* Step 1 */}
-            <div style={{background:"#1a1f2e", border:"1px solid #2a3a5a", borderRadius:10, padding:16, marginBottom:14}}>
-              <div style={{color:"#7ab8f5", fontWeight:700, fontSize:13, marginBottom:10}}>① Apps Script にコードを貼る</div>
-              <p style={{color:theme.textMuted, fontSize:12, marginBottom:10, lineHeight:1.6}}>
-                スプレッドシートを開いて「拡張機能」→「Apps Script」を開き、<br/>
-                下のコードを全部コピーして貼り付けて保存してください。
+        <div style={{display:"flex",gap:0,marginBottom:18,borderBottom:`1px solid ${T.border}`}}>
+          {[["backup","💾 バックアップ"],["sheets","📊 Google Sheets"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{background:"none",border:"none",padding:"8px 16px",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600,color:tab===k?T.accent:T.muted,borderBottom:tab===k?`2px solid ${T.accent}`:"2px solid transparent"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {tab==="backup" && (
+          <div>
+            <div style={{background:"#1a2a1a",border:"1px solid #2a4a2a",borderRadius:10,padding:16,marginBottom:14}}>
+              <div style={{color:"#6dbf6d",fontWeight:700,fontSize:13,marginBottom:8}}>📤 エクスポート（バックアップ保存）</div>
+              <p style={{color:T.muted,fontSize:12,lineHeight:1.7,marginBottom:12}}>
+                全データ（予約・顧客・メニュー）を JSON ファイルに保存します。<br/>
+                <strong style={{color:T.accentL}}>月に1回はダウンロードして保管することをおすすめします。</strong>
               </p>
+              <button style={btn1({width:"100%"})} onClick={exportJSON}>
+                JSONファイルをダウンロード
+              </button>
+            </div>
+            <div style={{background:"#1a1f2e",border:"1px solid #2a3a5a",borderRadius:10,padding:16}}>
+              <div style={{color:"#7ab8f5",fontWeight:700,fontSize:13,marginBottom:8}}>📥 インポート（データ復元）</div>
+              <p style={{color:T.muted,fontSize:12,lineHeight:1.7,marginBottom:12}}>
+                以前にダウンロードした JSON ファイルを選択するとデータを復元できます。<br/>
+                <span style={{color:T.danger}}>※ 現在のデータは上書きされます。</span>
+              </p>
+              <input ref={fileRef} type="file" accept=".json" onChange={importJSON} style={{display:"none"}}/>
+              <button style={btn2({width:"100%"})} onClick={()=>fileRef.current.click()}>
+                JSONファイルを選択して復元
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab==="sheets" && (
+          <div>
+            <div style={{background:"#1a1f2e",border:"1px solid #2a3a5a",borderRadius:10,padding:16,marginBottom:12}}>
+              <div style={{color:"#7ab8f5",fontWeight:700,fontSize:12,marginBottom:8}}>
+                ① Apps Script にコードを貼る
+              </div>
               <div style={{position:"relative"}}>
-                <pre style={{background:"#0d1117", border:"1px solid #2a3a5a", borderRadius:6, padding:12, fontSize:10, color:"#6dbf6d", lineHeight:1.7, overflowX:"auto", margin:0, whiteSpace:"pre-wrap"}}>
+                <pre style={{background:"#0d1117",border:"1px solid #2a3a5a",borderRadius:6,padding:10,fontSize:9,color:"#6dbf6d",lineHeight:1.7,overflowX:"auto",margin:0,whiteSpace:"pre-wrap",maxHeight:200,overflowY:"auto"}}>
                   {scriptCode}
                 </pre>
-                <button onClick={()=>{navigator.clipboard.writeText(scriptCode); alert("コピーしました！");}}
-                  style={{position:"absolute", top:8, right:8, background:"#2a3a5a", color:"#7ab8f5", border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer", fontSize:11}}>
+                <button
+                  onClick={()=>{navigator.clipboard.writeText(scriptCode);alert("コピーしました！");}}
+                  style={{position:"absolute",top:6,right:6,background:"#2a3a5a",color:"#7ab8f5",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10}}>
                   コピー
                 </button>
               </div>
             </div>
-
-            {/* Step 2 */}
-            <div style={{background:"#1a1f2e", border:"1px solid #2a3a5a", borderRadius:10, padding:16, marginBottom:14}}>
-              <div style={{color:"#7ab8f5", fontWeight:700, fontSize:13, marginBottom:8}}>② デプロイする</div>
-              <p style={{color:theme.textMuted, fontSize:12, lineHeight:1.7}}>
-                Apps Script の画面で右上「<strong style={{color:theme.text}}>デプロイ</strong>」→「<strong style={{color:theme.text}}>新しいデプロイ</strong>」<br/>
-                → 種類：<strong style={{color:theme.text}}>ウェブアプリ</strong>　アクセス：<strong style={{color:theme.text}}>全員</strong><br/>
-                → 「デプロイ」→ 表示された <strong style={{color:theme.accent}}>URL をコピー</strong>
+            <div style={{background:"#1a1f2e",border:"1px solid #2a3a5a",borderRadius:10,padding:16,marginBottom:12}}>
+              <div style={{color:"#7ab8f5",fontWeight:700,fontSize:12,marginBottom:8}}>
+                ② デプロイ → URL を貼る
+              </div>
+              <p style={{color:T.muted,fontSize:11,lineHeight:1.6,marginBottom:10}}>
+                「デプロイ」→「新しいデプロイ」→ 種類：ウェブアプリ → アクセス：全員 → URLをコピー
               </p>
-            </div>
-
-            {/* Step 3 */}
-            <div style={{background:"#1a1f2e", border:"1px solid #2a3a5a", borderRadius:10, padding:16, marginBottom:14}}>
-              <div style={{color:"#7ab8f5", fontWeight:700, fontSize:13, marginBottom:8}}>③ URL を貼り付けてテスト送信</div>
-              <label style={S.label}>Apps Script の URL</label>
-              <input style={{...S.input, marginBottom:10}} value={apiUrl} onChange={e=>setApiUrl(e.target.value)}
+              <input style={inp({marginBottom:8})} value={gsUrl}
+                onChange={e=>setGsUrl(e.target.value)}
                 placeholder="https://script.google.com/macros/s/.../exec"/>
-              <div style={{display:"flex", gap:10}}>
-                <button style={{...S.btnSecondary, flex:1}} onClick={save}>URLを保存</button>
-                <button style={{...S.btnPrimary, flex:1, opacity:testing?0.6:1}} onClick={testConnection} disabled={testing}>
-                  {testing ? "送信中..." : "🔌 接続テスト"}
+              <div style={{display:"flex",gap:8}}>
+                <button style={btn2({flex:1})} onClick={saveUrl}>保存</button>
+                <button style={btn1({flex:1,opacity:testing?0.6:1})} onClick={testGs} disabled={testing}>
+                  {testing?"送信中...":"🔌 接続テスト"}
                 </button>
               </div>
             </div>
-
-            {status.msg && (
-              <div style={{background:status.ok?"#1a2a1a":"#2a1a1a", border:`1px solid ${status.ok?"#3a6a3a":"#6a3a3a"}`, borderRadius:8, padding:12, marginBottom:14}}>
-                <p style={{color:status.ok?theme.success:theme.danger, fontSize:13, margin:0}}>{status.msg}</p>
+            {gsStatus.msg && (
+              <div style={{background:gsStatus.ok?"#1a2a1a":"#2a1a1a",border:`1px solid ${gsStatus.ok?"#3a6a3a":"#6a3a3a"}`,borderRadius:8,padding:10}}>
+                <p style={{color:gsStatus.ok?T.success:T.danger,fontSize:12,margin:0}}>{gsStatus.msg}</p>
               </div>
             )}
-
-            <div style={S.btnRow}>
-              <button style={S.btnSecondary} onClick={onClose}>閉じる</button>
-            </div>
           </div>
+        )}
+
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+          <button style={btn2()} onClick={onClose}>閉じる</button>
         </div>
-      );
-    }
+      </div>
+    </div>
+  );
+}
 
-    // ========== RESERVATION MODAL ==========
-    function ReservationModal({ slot, customers, menus, onSave, onClose, onDelete, existing }) {
-      const [customerName, setCustomerName] = useState(existing?.customerName || "");
-      const [menuId, setMenuId] = useState(existing?.menuId || "");
-      const [seat, setSeat] = useState(existing?.seat || 1);
-      const [note, setNote] = useState(existing?.note || "");
-      const [suggestions, setSuggestions] = useState([]);
-      const selectedMenu = menus.find(m => m.id === Number(menuId));
+// ══════════════════════════════════════
+// メインアプリ
+// ══════════════════════════════════════
+function App() {
+  const [tab, setTab] = useState("calendar");
+  const [reservations, setRsvs] = useState(()=>ls("reservations",[]));
+  const [customers, setCusts] = useState(()=>ls("customers",DEF_CUSTOMERS));
+  const [menus, setMenus] = useState(()=>ls("menus",DEF_MENUS));
+  const [showMgr, setShowMgr] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth<=640);
 
-      // 名前入力時にサジェスト表示
-      const handleNameChange = (val) => {
-        setCustomerName(val);
-        if (val.trim() === "") { setSuggestions([]); return; }
-        const matched = customers.filter(c => c.name.includes(val));
-        setSuggestions(matched.slice(0, 5));
-      };
+  useEffect(()=>{
+    const h=()=>setIsMobile(window.innerWidth<=640);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
+  useEffect(()=>lsSet("reservations",reservations),[reservations]);
+  useEffect(()=>lsSet("customers",customers),[customers]);
+  useEffect(()=>lsSet("menus",menus),[menus]);
 
-      const handleSave = () => {
-        if (!customerName.trim() || !menuId) return;
-        const rsv = {
-          id: existing?.id || generateId(),
-          date: slot.date, hour: slot.hour, seat,
-          customerName: customerName.trim(),
-          menuId: Number(menuId),
-          menuName: selectedMenu?.name,
-          price: selectedMenu?.price,
-          note,
-        };
-        syncToSheets(existing ? "edit" : "add", rsv);
-        onSave(rsv);
-      };
+  const addRsv = r => setRsvs(p=>[...p,r]);
+  const editRsv = r => {
+    if(r.__delete) setRsvs(p=>p.filter(x=>x.id!==r.id));
+    else setRsvs(p=>p.map(x=>x.id===r.id?r:x));
+  };
+  const restore = d => { setRsvs(d.reservations); setCusts(d.customers); setMenus(d.menus); };
 
-      const handleDelete = (id) => {
-        // スプレッドシートにも削除を通知
-        const rsv = existing;
-        syncToSheets("delete", {
-          date: rsv.date, hour: rsv.hour, seat: rsv.seat,
-          customerName: rsv.customerName, menuName: rsv.menuName,
-          price: rsv.price, note: "【削除】"
-        });
-        onDelete(id);
-      };
+  const todayRsvs = reservations.filter(r=>r.date===fmtDate(new Date()));
 
-      return (
-        <div style={S.overlay} onClick={onClose}>
-          <div style={S.modal} onClick={e=>e.stopPropagation()}>
-            <h2 style={S.modalTitle}>{existing ? "予約を編集" : "新規予約"}</h2>
-            <p style={{color:theme.accent, fontSize:13, marginBottom:16}}>📅 {slot.date}　⏰ {slot.hour}:00</p>
-            <label style={S.label}>席</label>
-            <div style={{display:"flex", gap:10, marginBottom:16}}>
-              {[1,2].map(s=>(
-                <button key={s} onClick={()=>setSeat(s)} style={{...S.seatBtn,...(seat===s?S.seatBtnActive:{})}}>席 {s}</button>
-              ))}
-            </div>
-            <label style={S.label}>お客様名</label>
-            <div style={{position:"relative", marginBottom:12}}>
-              <input
-                style={{...S.input, marginBottom:0}}
-                value={customerName}
-                onChange={e=>handleNameChange(e.target.value)}
-                placeholder="名前を入力（候補が出ます）"
-                autoComplete="off"
-              />
-              {suggestions.length > 0 && (
-                <div style={{position:"absolute", top:"100%", left:0, right:0, background:theme.card, border:`1px solid ${theme.accent}`, borderRadius:8, zIndex:100, overflow:"hidden", marginTop:2}}>
-                  {suggestions.map(c=>(
-                    <div key={c.id}
-                      onClick={()=>{ setCustomerName(c.name); setSuggestions([]); }}
-                      style={{padding:"9px 14px", cursor:"pointer", color:theme.text, fontSize:13, borderBottom:`1px solid ${theme.border}`}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#2a2820"}
-                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                      {c.name} <span style={{color:theme.textMuted, fontSize:11}}>{c.phone}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <label style={S.label}>メニュー</label>
-            <select style={S.select} value={menuId} onChange={e=>setMenuId(e.target.value)}>
-              <option value="">選択してください</option>
-              {menus.map(m=><option key={m.id} value={m.id}>{m.name}　¥{m.price.toLocaleString()}</option>)}
-            </select>
-            {selectedMenu && (
-              <div style={{background:"#1a2030", border:"1px solid #2a3a5a", borderRadius:8, padding:10, marginBottom:14}}>
-                <p style={{color:"#7ab8f5", fontSize:12, margin:0}}>⏱ {selectedMenu.duration}分　　💴 ¥{selectedMenu.price.toLocaleString()}</p>
-              </div>
-            )}
-            <label style={S.label}>メモ</label>
-            <textarea style={{...S.input, height:70, resize:"vertical"}} value={note} onChange={e=>setNote(e.target.value)} placeholder="備考など"/>
-            <div style={S.btnRow}>
-              {existing && <button style={{...S.btnSecondary, color:theme.danger, borderColor:theme.danger}} onClick={()=>handleDelete(existing.id)}>削除</button>}
-              <div style={{flex:1}}/>
-              <button style={S.btnSecondary} onClick={onClose}>キャンセル</button>
-              <button style={S.btnPrimary} onClick={handleSave} disabled={!customerName.trim()||!menuId}>保存</button>
-            </div>
-          </div>
+  const TABS = [
+    {key:"calendar", full:"📅 予約カレンダー", short:"📅"},
+    {key:"customers", full:"👤 顧客リスト", short:"👤"},
+    {key:"menus", full:"✂️ メニュー設定", short:"✂️"},
+    {key:"sales", full:"💴 売上管理", short:"💴"},
+  ];
+
+  return (
+    <div style={{background:T.bg,minHeight:"100vh",display:"flex",flexDirection:"column",color:T.muted}}>
+      {/* ヘッダー */}
+      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:isMobile?"10px 14px":"12px 20px",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:32,height:32,background:T.accent,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>✂</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:T.text,fontWeight:800,fontSize:isMobile?14:16,letterSpacing:"0.05em"}}>BARBER MANAGER</div>
+          {!isMobile && <div style={{color:T.muted,fontSize:10}}>理容室予約管理システム</div>}
         </div>
-      );
-    }
-
-    // ========== CUSTOMER MODAL ==========
-    function CustomerModal({ customer, onSave, onClose }) {
-      const [form, setForm] = useState(customer || {name:"",phone:"",email:"",memo:""});
-      const set = (k,v) => setForm(p=>({...p,[k]:v}));
-      return (
-        <div style={S.overlay} onClick={onClose}>
-          <div style={S.modal} onClick={e=>e.stopPropagation()}>
-            <h2 style={S.modalTitle}>{customer ? "顧客を編集" : "新規顧客登録"}</h2>
-            <label style={S.label}>お名前 *</label>
-            <input style={S.input} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="田中 太郎"/>
-            <label style={S.label}>電話番号</label>
-            <input style={S.input} value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="090-0000-0000"/>
-            <label style={S.label}>メールアドレス</label>
-            <input style={S.input} value={form.email} onChange={e=>set("email",e.target.value)} placeholder="email@example.com"/>
-            <label style={S.label}>メモ</label>
-            <textarea style={{...S.input, height:70, resize:"vertical"}} value={form.memo} onChange={e=>set("memo",e.target.value)}/>
-            <div style={S.btnRow}>
-              <button style={S.btnSecondary} onClick={onClose}>キャンセル</button>
-              <button style={S.btnPrimary} onClick={()=>onSave({...form, id:customer?.id||generateId()})} disabled={!form.name}>保存</button>
-            </div>
-          </div>
+        <div style={{background:T.card,borderRadius:7,padding:"5px 10px",border:`1px solid ${T.border}`,flexShrink:0,display:"flex",alignItems:"center",gap:4}}>
+          <span style={{fontSize:11,color:T.muted}}>今日</span>
+          <span style={{color:T.accent,fontWeight:700,fontSize:14}}>{todayRsvs.length}件</span>
         </div>
-      );
-    }
+        <button style={btnS({fontSize:isMobile?12:13,padding:isMobile?"7px 10px":"7px 14px",flexShrink:0})} onClick={()=>setShowMgr(true)}>
+          {isMobile?"⚙️":"⚙️ データ管理"}
+        </button>
+      </div>
 
-    // ========== MENU MODAL ==========
-    function MenuModal({ menu, onSave, onClose }) {
-      const [form, setForm] = useState(menu || {name:"",duration:60,price:0});
-      const set = (k,v) => setForm(p=>({...p,[k]:v}));
-      return (
-        <div style={S.overlay} onClick={onClose}>
-          <div style={S.modal} onClick={e=>e.stopPropagation()}>
-            <h2 style={S.modalTitle}>{menu ? "メニューを編集" : "新規メニュー"}</h2>
-            <label style={S.label}>メニュー名 *</label>
-            <input style={S.input} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="カット"/>
-            <label style={S.label}>所要時間（分）</label>
-            <input style={S.input} type="number" value={form.duration} onChange={e=>set("duration",Number(e.target.value))}/>
-            <label style={S.label}>料金（円）</label>
-            <input style={S.input} type="number" value={form.price} onChange={e=>set("price",Number(e.target.value))}/>
-            <div style={S.btnRow}>
-              <button style={S.btnSecondary} onClick={onClose}>キャンセル</button>
-              <button style={S.btnPrimary} onClick={()=>onSave({...form, id:menu?.id||generateId()})} disabled={!form.name}>保存</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
+      {/* タブ */}
+      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 10px",display:"flex",overflowX:"auto"}}>
+        {TABS.map(t=>(
+          <button key={t.key} onClick={()=>setTab(t.key)}
+            style={{background:"none",border:"none",padding:isMobile?"10px 12px":"11px 16px",cursor:"pointer",fontFamily:"inherit",fontSize:isMobile?12:13,fontWeight:600,color:tab===t.key?T.accent:T.muted,borderBottom:tab===t.key?`2px solid ${T.accent}`:"2px solid transparent",whiteSpace:"nowrap",transition:"color 0.2s"}}>
+            {isMobile ? t.short : t.full}
+          </button>
+        ))}
+      </div>
 
-    // ========== CALENDAR VIEW ==========
-    function CalendarView({ reservations, customers, menus, onAddReservation, onEditReservation }) {
-      const [baseDate, setBaseDate] = useState(new Date());
-      const [modal, setModal] = useState(null);
-      const weekDates = getWeekDates(baseDate);
-      const todayStr = formatDate(new Date());
+      {/* メイン */}
+      <div style={{flex:1,padding:isMobile?10:18,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:0}}>
+        {tab==="calendar" && <CalendarView reservations={reservations} customers={customers} menus={menus} onAdd={addRsv} onEdit={editRsv}/>}
+        {tab==="customers" && <CustomerListView customers={customers} reservations={reservations} onAdd={c=>setCusts(p=>[...p,c])} onEdit={c=>setCusts(p=>p.map(x=>x.id===c.id?c:x))} onDelete={id=>setCusts(p=>p.filter(c=>c.id!==id))}/>}
+        {tab==="menus" && <MenuView menus={menus} onAdd={m=>setMenus(p=>[...p,m])} onEdit={m=>setMenus(p=>p.map(x=>x.id===m.id?m:x))} onDelete={id=>setMenus(p=>p.filter(m=>m.id!==id))}/>}
+        {tab==="sales" && <SalesView reservations={reservations} menus={menus}/>}
+      </div>
 
-      const getSlotRsvs = (date, hour) => {
-        const ds = formatDate(date);
-        return reservations.filter(r => r.date===ds && r.hour===hour);
-      };
-      const handleCellClick = (date, hour, seat) => {
-        const ds = formatDate(date);
-        const existing = reservations.find(r=>r.date===ds&&r.hour===hour&&r.seat===seat);
-        setModal({slot:{date:ds,hour},seat,existing});
-      };
-      const handleSave = (r) => { modal?.existing ? onEditReservation(r) : onAddReservation(r); setModal(null); };
-      const handleDelete = (id) => { onEditReservation({__delete:true,id}); setModal(null); };
+      {showMgr && (
+        <DataModal
+          reservations={reservations} customers={customers} menus={menus}
+          onRestore={restore} onClose={()=>setShowMgr(false)}
+        />
+      )}
+    </div>
+  );
+}
 
-      return (
-        <div style={{flex:1, overflow:"hidden", display:"flex", flexDirection:"column"}}>
-          <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:16}}>
-            <button style={S.navBtn} onClick={()=>{const d=new Date(baseDate);d.setDate(d.getDate()-7);setBaseDate(d);}}>‹</button>
-            <button style={{...S.navBtn, fontSize:12, padding:"6px 14px"}} onClick={()=>setBaseDate(new Date())}>今日</button>
-            <button style={S.navBtn} onClick={()=>{const d=new Date(baseDate);d.setDate(d.getDate()+7);setBaseDate(d);}}>›</button>
-            <span style={{color:theme.text, fontWeight:700, fontSize:16}}>
-              {weekDates[0].getFullYear()}年 {weekDates[0].getMonth()+1}月 {weekDates[0].getDate()}日 〜 {weekDates[6].getMonth()+1}月 {weekDates[6].getDate()}日
-            </span>
-          </div>
-          <div style={{flex:1, overflow:"auto", borderRadius:12, border:`1px solid ${theme.border}`}}>
-            <table style={{width:"100%", borderCollapse:"collapse", tableLayout:"fixed"}}>
-              <thead>
-                <tr>
-                  <th style={{...S.th, width:52, position:"sticky", top:0, left:0, zIndex:3, background:theme.surface}}>時</th>
-                  {weekDates.map((d,i)=>{
-                    const isT = formatDate(d)===todayStr;
-                    return (
-                      <th key={i} style={{...S.th, position:"sticky", top:0, zIndex:2, background:theme.surface, color:isT?theme.accent:(i>=5?"#e88":theme.text), borderBottom:isT?`2px solid ${theme.accent}`:`1px solid ${theme.border}`}}>
-                        <div style={{fontSize:11, color:theme.textMuted}}>{DAY_NAMES[i]}</div>
-                        <div style={{fontSize:16, fontWeight:700}}>{d.getDate()}</div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {HOURS.map(hour=>(
-                  <tr key={hour}>
-                    <td style={{...S.td, textAlign:"center", fontSize:12, color:theme.textMuted, background:theme.surface, position:"sticky", left:0, zIndex:1, fontWeight:600}}>{hour}:00</td>
-                    {weekDates.map((d,di)=>{
-                      const slotRsvs = getSlotRsvs(d, hour);
-                      const seat1 = slotRsvs.find(r=>r.seat===1);
-                      const seat2 = slotRsvs.find(r=>r.seat===2);
-                      const isT = formatDate(d)===todayStr;
-                      return (
-                        <td key={di} style={{...S.td, padding:2, background:isT?"#1a1a14":"transparent", verticalAlign:"top"}}>
-                          <div style={{display:"flex", gap:2, height:52}}>
-                            {[{seat:1,rsv:seat1},{seat:2,rsv:seat2}].map(({seat,rsv})=>(
-                              <div key={seat} onClick={()=>handleCellClick(d,hour,seat)}
-                                style={{flex:1, borderRadius:5, cursor:"pointer", transition:"all 0.15s", background:rsv?`${theme.accentDark}cc`:"transparent", border:rsv?`1px solid ${theme.accent}`:`1px dashed ${theme.border}`, padding:"2px 4px", overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"center"}}
-                                onMouseEnter={e=>{if(!rsv)e.currentTarget.style.background="#2a2820";}}
-                                onMouseLeave={e=>{if(!rsv)e.currentTarget.style.background="transparent";}}>
-                                {rsv ? (
-                                  <>
-                                    <div style={{fontSize:10, color:theme.accentLight, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{rsv.customerName}</div>
-                                    <div style={{fontSize:9, color:theme.textMuted, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{rsv.menuName}</div>
-                                  </>
-                                ) : (
-                                  <div style={{fontSize:9, color:theme.textDim, textAlign:"center"}}>席{seat}</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {modal && <ReservationModal slot={modal.slot} customers={customers} menus={menus} existing={modal.existing} onSave={handleSave} onClose={()=>setModal(null)} onDelete={handleDelete}/>}
-        </div>
-      );
-    }
-
-    // ========== CUSTOMER LIST ==========
-    function CustomerListView({ customers, reservations, onAdd, onEdit, onDelete }) {
-      const [search, setSearch] = useState("");
-      const [modal, setModal] = useState(null);
-      const filtered = customers.filter(c=>c.name.includes(search)||c.phone.includes(search)||c.email.includes(search));
-      const visits = id => reservations.filter(r=>r.customerId===id).length;
-      const spend = id => reservations.filter(r=>r.customerId===id).reduce((s,r)=>s+(r.price||0),0);
-      return (
-        <div style={{flex:1}}>
-          <div style={{display:"flex", gap:12, marginBottom:16}}>
-            <input style={{...S.input, flex:1, marginBottom:0}} placeholder="🔍 名前・電話・メールで検索" value={search} onChange={e=>setSearch(e.target.value)}/>
-            <button style={S.btnPrimary} onClick={()=>setModal({mode:"new"})}>＋ 新規登録</button>
-          </div>
-          <div style={{overflow:"auto"}}>
-            <table style={{width:"100%", borderCollapse:"collapse"}}>
-              <thead>
-                <tr>{["名前","電話番号","メール","来店回数","累計金額","メモ","操作"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {filtered.map(c=>(
-                  <tr key={c.id} style={{borderBottom:`1px solid ${theme.border}`}} onMouseEnter={e=>e.currentTarget.style.background="#1e1c18"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <td style={{...S.td, fontWeight:600, color:theme.text}}>{c.name}</td>
-                    <td style={S.td}>{c.phone}</td>
-                    <td style={S.td}>{c.email}</td>
-                    <td style={{...S.td, textAlign:"center", color:theme.accent, fontWeight:700}}>{visits(c.id)}回</td>
-                    <td style={{...S.td, textAlign:"right", color:theme.accentLight, fontWeight:700}}>¥{spend(c.id).toLocaleString()}</td>
-                    <td style={{...S.td, color:theme.textMuted, fontSize:12}}>{c.memo}</td>
-                    <td style={S.td}>
-                      <div style={{display:"flex", gap:6}}>
-                        <button style={S.actionBtn} onClick={()=>setModal({mode:"edit",customer:c})}>編集</button>
-                        <button style={{...S.actionBtn, color:theme.danger}} onClick={()=>onDelete(c.id)}>削除</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {modal && <CustomerModal customer={modal.mode==="edit"?modal.customer:null} onSave={c=>{modal.mode==="edit"?onEdit(c):onAdd(c);setModal(null);}} onClose={()=>setModal(null)}/>}
-        </div>
-      );
-    }
-
-    // ========== MENU VIEW ==========
-    function MenuView({ menus, onAdd, onEdit, onDelete }) {
-      const [modal, setModal] = useState(null);
-      return (
-        <div style={{flex:1}}>
-          <div style={{display:"flex", justifyContent:"flex-end", marginBottom:16}}>
-            <button style={S.btnPrimary} onClick={()=>setModal({mode:"new"})}>＋ メニュー追加</button>
-          </div>
-          <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))", gap:14}}>
-            {menus.map(m=>(
-              <div key={m.id} style={S.menuCard}>
-                <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
-                  <div>
-                    <div style={{fontSize:17, fontWeight:700, color:theme.text, marginBottom:6}}>{m.name}</div>
-                    <div style={{fontSize:13, color:theme.textMuted}}>⏱ {m.duration}分</div>
-                  </div>
-                  <div style={{fontSize:22, fontWeight:800, color:theme.accent}}>¥{m.price.toLocaleString()}</div>
-                </div>
-                <div style={{display:"flex", gap:8, marginTop:14}}>
-                  <button style={{...S.actionBtn, flex:1}} onClick={()=>setModal({mode:"edit",menu:m})}>編集</button>
-                  <button style={{...S.actionBtn, flex:1, color:theme.danger}} onClick={()=>onDelete(m.id)}>削除</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          {modal && <MenuModal menu={modal.mode==="edit"?modal.menu:null} onSave={m=>{modal.mode==="edit"?onEdit(m):onAdd(m);setModal(null);}} onClose={()=>setModal(null)}/>}
-        </div>
-      );
-    }
-
-    // ========== SALES VIEW ==========
-    function SalesView({ reservations, menus }) {
-      const [period, setPeriod] = useState("month");
-      const [selMonth, setSelMonth] = useState(()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;});
-      const filtered = reservations.filter(r=>{
-        if(period==="month") return r.date?.startsWith(selMonth);
-        if(period==="today") return r.date===formatDate(new Date());
-        return true;
-      });
-      const totalSales = filtered.reduce((s,r)=>s+(r.price||0),0);
-      const totalCount = filtered.length;
-      const menuStats = menus.map(m=>{const rs=filtered.filter(r=>r.menuId===m.id);return {...m,count:rs.length,total:rs.reduce((s,r)=>s+(r.price||0),0)};}).filter(m=>m.count>0).sort((a,b)=>b.total-a.total);
-      const dailyMap={};filtered.forEach(r=>{dailyMap[r.date]=(dailyMap[r.date]||0)+(r.price||0);});
-      const dailyEntries=Object.entries(dailyMap).sort(([a],[b])=>a.localeCompare(b));
-      const maxDaily=Math.max(...dailyEntries.map(([,v])=>v),1);
-      const exportCSV=()=>{
-        const hdr="日付,時間,席,顧客名,メニュー,金額,メモ";
-        const rows=filtered.map(r=>`${r.date},${r.hour}:00,${r.seat},${r.customerName||""},${r.menuName||""},${r.price||0},${r.note||""}`);
-        const blob=new Blob(["\uFEFF"+[hdr,...rows].join("\n")],{type:"text/csv;charset=utf-8;"});
-        const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`売上_${selMonth}.csv`; a.click();
-      };
-      return (
-        <div style={{flex:1}}>
-          <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:20, flexWrap:"wrap"}}>
-            {[["today","今日"],["month","月別"],["all","全期間"]].map(([v,l])=>(
-              <button key={v} onClick={()=>setPeriod(v)} style={{...S.navBtn,...(period===v?{background:theme.accent,color:"#000",border:`1px solid ${theme.accent}`}:{})}}>{l}</button>
-            ))}
-            {period==="month" && <input type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{...S.input,marginBottom:0,width:"auto",padding:"6px 12px"}}/>}
-            <div style={{flex:1}}/>
-            <button style={S.btnPrimary} onClick={exportCSV}>📥 CSV ダウンロード</button>
-          </div>
-          <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:14, marginBottom:24}}>
-            <div style={S.kpiCard}><div style={S.kpiLabel}>売上合計</div><div style={S.kpiValue}>¥{totalSales.toLocaleString()}</div></div>
-            <div style={S.kpiCard}><div style={S.kpiLabel}>予約件数</div><div style={S.kpiValue}>{totalCount}件</div></div>
-            <div style={S.kpiCard}><div style={S.kpiLabel}>客単価</div><div style={S.kpiValue}>¥{totalCount>0?Math.round(totalSales/totalCount).toLocaleString():0}</div></div>
-          </div>
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:20}}>
-            <div style={S.card}>
-              <h3 style={S.cardTitle}>メニュー別売上</h3>
-              {menuStats.length===0?<p style={{color:theme.textMuted,fontSize:13}}>データなし</p>:menuStats.map(m=>(
-                <div key={m.id} style={{marginBottom:12}}>
-                  <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
-                    <span style={{color:theme.text,fontSize:13}}>{m.name} <span style={{color:theme.textMuted}}>×{m.count}</span></span>
-                    <span style={{color:theme.accentLight,fontWeight:700,fontSize:13}}>¥{m.total.toLocaleString()}</span>
-                  </div>
-                  <div style={{background:theme.border,borderRadius:3,height:6}}>
-                    <div style={{background:theme.accent,height:6,borderRadius:3,width:`${(m.total/totalSales)*100}%`,transition:"width 0.5s"}}/>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={S.card}>
-              <h3 style={S.cardTitle}>日別売上</h3>
-              {dailyEntries.length===0?<p style={{color:theme.textMuted,fontSize:13}}>データなし</p>:(
-                <div style={{display:"flex", alignItems:"flex-end", gap:4, height:140, overflow:"auto"}}>
-                  {dailyEntries.map(([date,val])=>(
-                    <div key={date} style={{flex:1, minWidth:24, display:"flex", flexDirection:"column", alignItems:"center", gap:4}}>
-                      <div style={{width:"100%",background:theme.accent,borderRadius:"3px 3px 0 0",height:`${(val/maxDaily)*100}px`,transition:"height 0.4s",minHeight:4}} title={`¥${val.toLocaleString()}`}/>
-                      <div style={{fontSize:9,color:theme.textMuted,writingMode:"vertical-rl",height:32}}>{date.slice(5)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{...S.card, marginTop:20}}>
-            <h3 style={S.cardTitle}>予約一覧</h3>
-            <div style={{overflow:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr>{["日付","時間","席","顧客名","メニュー","金額","メモ"].map(h=><th key={h} style={{...S.th,fontSize:12}}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {[...filtered].sort((a,b)=>(b.date+b.hour).localeCompare(a.date+a.hour)).map(r=>(
-                    <tr key={r.id} style={{borderBottom:`1px solid ${theme.border}`}}>
-                      <td style={S.td}>{r.date}</td>
-                      <td style={S.td}>{r.hour}:00</td>
-                      <td style={{...S.td,textAlign:"center"}}>席{r.seat}</td>
-                      <td style={{...S.td,color:theme.text,fontWeight:600}}>{r.customerName}</td>
-                      <td style={S.td}>{r.menuName}</td>
-                      <td style={{...S.td,textAlign:"right",color:theme.accentLight,fontWeight:700}}>¥{(r.price||0).toLocaleString()}</td>
-                      <td style={{...S.td,color:theme.textMuted}}>{r.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // ========== MAIN APP ==========
-    function App() {
-      const [tab, setTab] = useState("calendar");
-      const [reservations, setReservations] = useState(()=>{try{return JSON.parse(localStorage.getItem("reservations")||"[]");}catch{return [];}});
-      const [customers, setCustomers] = useState(()=>{try{return JSON.parse(localStorage.getItem("customers")||JSON.stringify(INITIAL_CUSTOMERS));}catch{return INITIAL_CUSTOMERS;}});
-      const [menus, setMenus] = useState(()=>{try{return JSON.parse(localStorage.getItem("menus")||JSON.stringify(INITIAL_MENUS));}catch{return INITIAL_MENUS;}});
-      const [showSheets, setShowSheets] = useState(false);
-
-      useEffect(()=>{localStorage.setItem("reservations",JSON.stringify(reservations));},[reservations]);
-      useEffect(()=>{localStorage.setItem("customers",JSON.stringify(customers));},[customers]);
-      useEffect(()=>{localStorage.setItem("menus",JSON.stringify(menus));},[menus]);
-
-      const addRsv = r => setReservations(p=>[...p,r]);
-      const editRsv = r => { if(r.__delete) setReservations(p=>p.filter(x=>x.id!==r.id)); else setReservations(p=>p.map(x=>x.id===r.id?r:x)); };
-
-      const TABS = [
-        {key:"calendar",label:"📅 予約カレンダー"},
-        {key:"customers",label:"👤 顧客リスト"},
-        {key:"menus",label:"✂️ メニュー設定"},
-        {key:"sales",label:"💴 売上管理"},
-      ];
-      const todayRsvs = reservations.filter(r=>r.date===formatDate(new Date()));
-
-      return (
-        <div style={{background:theme.bg, minHeight:"100vh", fontFamily:"'Noto Sans JP','Hiragino Sans',sans-serif", color:theme.textMuted, display:"flex", flexDirection:"column"}}>
-          {/* Header */}
-          <div style={{background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:"14px 24px", display:"flex", alignItems:"center", gap:16}}>
-            <div style={{display:"flex", alignItems:"center", gap:10}}>
-              <div style={{width:36,height:36,background:theme.accent,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>✂</div>
-              <div>
-                <div style={{color:theme.text,fontWeight:800,fontSize:16,letterSpacing:"0.05em"}}>BARBER MANAGER</div>
-                <div style={{color:theme.textMuted,fontSize:10}}>理容室予約管理システム</div>
-              </div>
-            </div>
-            <div style={{flex:1}}/>
-            <div style={{background:theme.card,borderRadius:8,padding:"6px 14px",border:`1px solid ${theme.border}`}}>
-              <span style={{fontSize:11,color:theme.textMuted}}>今日の予約　</span>
-              <span style={{color:theme.accent,fontWeight:700}}>{todayRsvs.length}件</span>
-            </div>
-            <button style={{...S.navBtn,fontSize:12}} onClick={()=>setShowSheets(true)}>📊 Google Sheets 連携</button>
-          </div>
-
-          {/* Tabs */}
-          <div style={{background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:"0 24px", display:"flex"}}>
-            {TABS.map(t=>(
-              <button key={t.key} onClick={()=>setTab(t.key)} style={{background:"none",border:"none",padding:"14px 18px",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600,color:tab===t.key?theme.accent:theme.textMuted,borderBottom:tab===t.key?`2px solid ${theme.accent}`:"2px solid transparent",transition:"all 0.2s"}}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Main */}
-          <div style={{flex:1, padding:24, display:"flex", flexDirection:"column", overflow:"hidden"}}>
-            {tab==="calendar" && <CalendarView reservations={reservations} customers={customers} menus={menus} onAddReservation={addRsv} onEditReservation={editRsv}/>}
-            {tab==="customers" && <CustomerListView customers={customers} reservations={reservations} onAdd={c=>setCustomers(p=>[...p,c])} onEdit={c=>setCustomers(p=>p.map(x=>x.id===c.id?c:x))} onDelete={id=>setCustomers(p=>p.filter(c=>c.id!==id))}/>}
-            {tab==="menus" && <MenuView menus={menus} onAdd={m=>setMenus(p=>[...p,m])} onEdit={m=>setMenus(p=>p.map(x=>x.id===m.id?m:x)) } onDelete={id=>setMenus(p=>p.filter(m=>m.id!==id))}/>}
-            {tab==="sales" && <SalesView reservations={reservations} menus={menus}/>}
-          </div>
-
-          {showSheets && <GoogleSheetsModal onClose={()=>setShowSheets(false)}/>}
-        </div>
-      );
-    }
-
-    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-  </script>
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
 </body>
 </html>
