@@ -190,6 +190,109 @@ tr:hover td{background:rgba(200,169,110,.03);}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
 ::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+/* ============================================
+   スマホ対応 レスポンシブ
+   ============================================ */
+
+/* ボトムナビ（スマホ専用） */
+.bottom-nav{display:none;}
+
+@media(max-width:768px){
+  /* サイドバーを非表示 */
+  .sidebar{display:none;}
+
+  /* メインエリアの下にボトムナビ分のパディング */
+  .main{padding-bottom:70px;}
+  .page{padding:16px 14px 20px;}
+
+  /* ボトムナビを表示 */
+  .bottom-nav{
+    display:flex;
+    position:fixed;
+    bottom:0;left:0;right:0;
+    height:62px;
+    background:var(--bg2);
+    border-top:1px solid var(--border);
+    z-index:100;
+    align-items:stretch;
+  }
+  .bn-item{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;cursor:pointer;font-size:10px;color:var(--text3);
+    transition:color .2s,background .2s;
+    border:none;background:transparent;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .bn-item.active{color:var(--accent);}
+  .bn-item .bn-icon{font-size:20px;line-height:1;}
+  .bn-item .bn-label{font-size:9px;letter-spacing:.3px;}
+
+  /* ページヘッダー */
+  .page-header{margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+  .page-title{font-size:20px;}
+  .page-subtitle{font-size:11px;}
+
+  /* 予約新規ボタンを画面右下FABに */
+  .fab{
+    position:fixed;right:16px;bottom:78px;
+    width:52px;height:52px;border-radius:50%;
+    background:var(--accent);color:#0f0f0f;
+    font-size:26px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    border:none;cursor:pointer;
+    box-shadow:0 4px 20px rgba(200,169,110,.4);
+    z-index:99;
+    transition:transform .2s,box-shadow .2s;
+  }
+  .fab:active{transform:scale(.93);}
+  /* PCではFABを非表示 */
+
+  /* 週カレンダーはスクロール可能に（変更なし、ただしサイズ調整） */
+  .week-outer{border-radius:8px;}
+  .wtd-slot{height:46px;}
+
+  /* 顧客グリッド：1列に */
+  .cust-grid{grid-template-columns:1fr;}
+
+  /* 売上統計：2列に */
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-val{font-size:22px;}
+
+  /* 売上チャート：縦並びに */
+  .sales-row{grid-template-columns:1fr;}
+
+  /* メニューグリッド：1列に */
+  .menu-grid{grid-template-columns:1fr;}
+
+  /* テーブルは横スクロール */
+  .stbl{overflow-x:auto;}
+  table{min-width:560px;}
+  td,th{padding:10px 12px;font-size:12px;}
+
+  /* モーダル */
+  .modal{padding:20px 16px;border-radius:10px 10px 0 0;width:100%;max-width:100%;position:fixed;bottom:0;left:0;right:0;max-height:92vh;}
+  .modal-bg.show{align-items:flex-end;}
+  .form-r2{grid-template-columns:1fr;}
+  .form-r3{grid-template-columns:1fr 1fr;}
+  .modal-actions{flex-direction:column-reverse;}
+  .modal-actions .btn{width:100%;text-align:center;}
+
+  /* 詳細パネル */
+  .detail-panel{width:100%;right:-100%;}
+
+  /* カレンダーコントロール */
+  .calendar-controls{gap:8px;}
+  .cal-month{font-size:15px;min-width:100px;}
+
+  /* 通知をトップ中央に */
+  .notif{top:12px;right:50%;transform:translateX(50%) translateY(-120%);}
+  .notif.show{transform:translateX(50%) translateY(0);}
+
+  /* 設定画面 */
+  .settings-sec{padding:16px;}
+  .gas-code{font-size:10px;}
+}
 </style>
 </head>
 <body>
@@ -524,6 +627,33 @@ function ok() {
 </div>
 
 <div class="notif" id="notif">✓ <span id="notifText"></span></div>
+
+<!-- スマホ用ボトムナビゲーション -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bn-item active" onclick="showPage('reservation',this);setBottomNav(this)" id="bn-reservation">
+    <span class="bn-icon">📅</span>
+    <span class="bn-label">予約</span>
+  </button>
+  <button class="bn-item" onclick="showPage('customers',this);setBottomNav(this)" id="bn-customers">
+    <span class="bn-icon">👤</span>
+    <span class="bn-label">顧客</span>
+  </button>
+  <button class="bn-item" onclick="showPage('sales',this);setBottomNav(this)" id="bn-sales">
+    <span class="bn-icon">💴</span>
+    <span class="bn-label">売上</span>
+  </button>
+  <button class="bn-item" onclick="showPage('menu',this);setBottomNav(this)" id="bn-menu">
+    <span class="bn-icon">✂️</span>
+    <span class="bn-label">メニュー</span>
+  </button>
+  <button class="bn-item" onclick="showPage('settings',this);setBottomNav(this)" id="bn-settings">
+    <span class="bn-icon">⚙️</span>
+    <span class="bn-label">設定</span>
+  </button>
+</nav>
+
+<!-- スマホ用 FAB（予約追加ボタン） -->
+<button class="fab" id="fabBtn" onclick="openResModal()" title="新規予約">＋</button>
 
 <script>
 const CLRS=['color-0','color-1','color-2','color-3','color-4'];
@@ -1285,10 +1415,27 @@ function notify(msg,type='success'){
   setTimeout(()=>el.classList.remove('show'),3200);
 }
 
+// ボトムナビのアクティブ切り替え
+function setBottomNav(el){
+  document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  // 予約ページ以外ではFABを非表示
+  const fab=document.getElementById('fabBtn');
+  if(fab) fab.style.display=el?.id==='bn-reservation'?'':'none';
+}
+
+// showPageにボトムナビ連動を追加
+const _origShowPage=showPage;
+function showPage(id,el){
+  _origShowPage(id,el);
+  // ボトムナビ側も同期
+  const bn=document.getElementById('bn-'+id);
+  if(bn) setBottomNav(bn);
+}
+
 renderCalendar();
 checkStorageUsage();
-// GAS URLが設定済みなら起動時にバックグラウンドで自動読み込み
-setTimeout(autoLoadFromSheet, 800);
+setTimeout(autoLoadFromSheet,800);
 </script>
 </body>
 </html>
