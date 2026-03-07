@@ -578,33 +578,9 @@ let S = {
   view: 'week',
 };
 
-// 初回起動時だけサンプルデータを投入
+// 初回起動時も空の状態でスタート
 if(_isFirstLaunch){
-  const seeds=[
-    {name:'山田 太郎',kana:'やまだ たろう',phone:'090-1111-2222',email:'yamada@example.com',birth:'1985-04-10',staff:'田中 一郎',notes:'カラーNGアレルギーあり。前髪短め希望。'},
-    {name:'田中 花子',kana:'たなか はなこ',phone:'080-3333-4444',email:'hanako@example.com',birth:'1992-08-25',staff:'佐藤 二郎',notes:'毎月1回定期来店。パーマ希望。'},
-    {name:'佐藤 一郎',kana:'さとう いちろう',phone:'070-5555-6666',email:'',birth:'1978-12-01',staff:'鈴木 三郎',notes:''},
-    {name:'鈴木 二郎',kana:'すずき じろう',phone:'090-7777-8888',email:'suzuki@example.com',birth:'2000-03-15',staff:'田中 一郎',notes:'学生。シンプルなカットのみ。'},
-    {name:'伊藤 三郎',kana:'いとう さぶろう',phone:'080-9999-0000',email:'',birth:'1965-07-20',staff:'佐藤 二郎',notes:'シェービング+カット希望。'},
-  ];
-  seeds.forEach((s,i)=>S.customers.push({id:'c'+(i+1),...s,createdAt:new Date().toISOString()}));
-  const now=new Date();
-  const names=S.customers.map(c=>c.name).concat(['渡辺 四郎','小林 五郎','中村 六郎','加藤 七郎','松本 八郎']);
-  for(let i=0;i<40;i++){
-    const d=new Date(now);d.setDate(d.getDate()+Math.floor(Math.random()*14)-7);
-    d.setHours(HOURS[Math.floor(Math.random()*HOURS.length)],0,0,0);
-    const menu=S.menus[Math.floor(Math.random()*S.menus.length)];
-    const nm=names[Math.floor(Math.random()*names.length)];
-    const cust=S.customers.find(c=>c.name===nm);
-    S.reservations.push({
-      id:'r'+(100+i),custId:cust?cust.id:null,name:nm,
-      date:fd(d),time:`${String(d.getHours()).padStart(2,'0')}:00`,
-      slot:i%2,menu:menu.name,price:menu.price,duration:menu.time,
-      staff:S.staff[Math.floor(Math.random()*S.staff.length)],
-      phone:'',memo:'',colorIdx:Math.floor(Math.random()*5)
-    });
-  }
-  saveState(); // サンプルデータもすぐ保存
+  saveState();
 }
 
 // === NAV ===
