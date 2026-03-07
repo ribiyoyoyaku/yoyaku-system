@@ -196,8 +196,8 @@ tr:hover td{background:rgba(200,169,110,.03);}
    ============================================ */
 
 /* ボトムナビ（スマホ専用） */
-.bottom-nav{display:none;}
-.fab{display:none;}
+.bottom-nav{display:none;pointer-events:none;}
+.fab{display:none;pointer-events:none;}
 
 @media(max-width:600px){
   /* サイドバーを非表示 */
@@ -1420,15 +1420,6 @@ function notify(msg,type='success'){
 function setBottomNav(el){
   document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
   if(el) el.classList.add('active');
-  // FAB制御はスマホ幅のときだけ行う
-  const fab=document.getElementById('fabBtn');
-  if(fab){
-    if(window.innerWidth<=600){
-      fab.style.display=el?.id==='bn-reservation'?'flex':'none';
-    } else {
-      fab.style.display='none';
-    }
-  }
 }
 
 // showPageにボトムナビ連動を追加
