@@ -412,6 +412,18 @@ function ok() {
 }</div>
       <button class="btn btn-secondary" onclick="copyGasCode()">📋 コードをコピー</button>
     </div>
+    <div class="settings-sec">
+      <div class="settings-title">🗄️ データ管理</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.8">
+        データはこのブラウザの <strong style="color:var(--accent)">localStorage</strong> に自動保存されています。<br>
+        ページを閉じたり更新しても消えません。
+      </div>
+      <div style="background:rgba(224,85,85,.08);border:1px solid rgba(224,85,85,.2);border-radius:8px;padding:16px">
+        <div style="font-size:13px;color:var(--red);font-weight:600;margin-bottom:8px">⚠️ データの初期化</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:12px">全ての予約・顧客・メニューデータを削除してリセットします。この操作は元に戻せません。</div>
+        <button class="btn btn-danger" onclick="resetAllData()">🗑 全データを初期化する</button>
+      </div>
+    </div>
   </div>
 </main>
 </div>
@@ -509,7 +521,14 @@ const DJ=['日','月','火','水','木','金','土'];
 const MJ=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const HOURS=[9,10,11,12,13,14,15,16,17,18];
 
-let S={
+function fd(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+
+// =============================================
+// === localStorage 永続化 ====================
+// =============================================
+const LS_KEY = 'barberPro_v1';
+
+const DEFAULT_DATA = {
   menus:[
     {name:'カット',cat:'カット',price:3300,time:30,active:true,desc:'スタイルに合わせたカット'},
     {name:'カット＋シャンプー',cat:'カット',price:4400,time:45,active:true,desc:'シャンプー・ブローつき'},
@@ -521,15 +540,46 @@ let S={
   staff:['田中 一郎','佐藤 二郎','鈴木 三郎'],
   customers:[],
   reservations:[],
-  date:new Date(),
-  view:'week',
   shop:'理容サンプル店',
 };
 
-function fd(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+// localStorageから読み込む。なければデフォルト＋サンプルデータを使う
+function loadState(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(raw){
+      const saved=JSON.parse(raw);
+      return {...DEFAULT_DATA,...saved};
+    }
+  }catch(e){console.warn('localStorage読み込み失敗',e);}
+  return null;
+}
 
-// seed customers
-(function(){
+// localStorageへ保存（date/viewは保存しない）
+function saveState(){
+  try{
+    const toSave={
+      menus:S.menus,
+      staff:S.staff,
+      customers:S.customers,
+      reservations:S.reservations,
+      shop:S.shop,
+    };
+    localStorage.setItem(LS_KEY,JSON.stringify(toSave));
+  }catch(e){console.warn('localStorage保存失敗',e);}
+}
+
+const _saved = loadState();
+const _isFirstLaunch = !_saved;
+
+let S = {
+  ...(_saved || DEFAULT_DATA),
+  date: new Date(),
+  view: 'week',
+};
+
+// 初回起動時だけサンプルデータを投入
+if(_isFirstLaunch){
   const seeds=[
     {name:'山田 太郎',kana:'やまだ たろう',phone:'090-1111-2222',email:'yamada@example.com',birth:'1985-04-10',staff:'田中 一郎',notes:'カラーNGアレルギーあり。前髪短め希望。'},
     {name:'田中 花子',kana:'たなか はなこ',phone:'080-3333-4444',email:'hanako@example.com',birth:'1992-08-25',staff:'佐藤 二郎',notes:'毎月1回定期来店。パーマ希望。'},
@@ -538,10 +588,6 @@ function fd(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0
     {name:'伊藤 三郎',kana:'いとう さぶろう',phone:'080-9999-0000',email:'',birth:'1965-07-20',staff:'佐藤 二郎',notes:'シェービング+カット希望。'},
   ];
   seeds.forEach((s,i)=>S.customers.push({id:'c'+(i+1),...s,createdAt:new Date().toISOString()}));
-})();
-
-// seed reservations
-(function(){
   const now=new Date();
   const names=S.customers.map(c=>c.name).concat(['渡辺 四郎','小林 五郎','中村 六郎','加藤 七郎','松本 八郎']);
   for(let i=0;i<40;i++){
@@ -558,7 +604,8 @@ function fd(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0
       phone:'',memo:'',colorIdx:Math.floor(Math.random()*5)
     });
   }
-})();
+  saveState(); // サンプルデータもすぐ保存
+}
 
 // === NAV ===
 function showPage(id,el){
@@ -702,10 +749,12 @@ function saveReservation(){
     const i=S.reservations.findIndex(r=>r.id===eid);
     if(i>=0)S.reservations[i]=rec;
     notify('予約を更新しました');
+    saveState();
     syncReservation('update',rec);
   } else {
     S.reservations.push(rec);
     notify(`${name} 様 枠${slot===0?'A':'B'} 予約を追加しました`);
+    saveState();
     syncReservation('append',rec);
   }
   closeModal('resModal');renderCalendar();
@@ -717,6 +766,7 @@ function showResDetail(id,e){
     S.reservations=S.reservations.filter(x=>x.id!==id);
     renderCalendar();
     notify('予約を削除しました');
+    saveState();
     syncDeleteReservation(id);
   }
 }
@@ -833,11 +883,13 @@ function saveCustomer(){
     const i=S.customers.findIndex(c=>c.id===eid);
     if(i>=0)S.customers[i]={...S.customers[i],...data};
     notify('顧客情報を更新しました');
+    saveState();
     syncCustomer('update',S.customers.find(c=>c.id===eid));
   } else {
     const newCust={id:'c'+Date.now(),...data,createdAt:new Date().toISOString()};
     S.customers.push(newCust);
     notify(`${name} 様を顧客台帳に追加しました`);
+    saveState();
     syncCustomer('append',newCust);
   }
   closeModal('custModal');renderCustomers();
@@ -848,6 +900,7 @@ function delCust(id){
     S.customers=S.customers.filter(x=>x.id!==id);
     closePanel();renderCustomers();
     notify('顧客を削除しました');
+    saveState();
     syncDeleteCustomer(id);
   }}
 
@@ -921,8 +974,8 @@ function renderMenus(){
       </div>
     </div>`).join('');
 }
-function toggleMenu(i){S.menus[i].active=!S.menus[i].active;renderMenus();syncMenu();}
-function delMenu(i){if(confirm(`「${S.menus[i].name}」を削除しますか？`)){S.menus.splice(i,1);renderMenus();notify('メニューを削除しました');syncMenu();}}
+function toggleMenu(i){S.menus[i].active=!S.menus[i].active;renderMenus();saveState();syncMenu();}
+function delMenu(i){if(confirm(`「${S.menus[i].name}」を削除しますか？`)){S.menus.splice(i,1);renderMenus();notify('メニューを削除しました');saveState();syncMenu();}}
 function openMenuModal(idx){
   document.getElementById('menuModalTitle').textContent=idx!=null?'✂ メニューの編集':'✂ メニューの追加';
   document.getElementById('m_eid').value=idx!=null?idx:'';
@@ -939,6 +992,7 @@ function saveMenu(){
   if(eid!==''){S.menus[parseInt(eid)]={...d,active:S.menus[parseInt(eid)].active};notify('メニューを更新しました');}
   else{S.menus.push({...d,active:true});notify('メニューを追加しました');}
   closeModal('menuModal');renderMenus();
+  saveState();
   syncMenu();
 }
 
@@ -957,9 +1011,16 @@ function renderSettings(){
       <button class="btn btn-danger btn-sm" onclick="removeStaff(${i})">削除</button>
     </div>`).join('');
 }
-function updateShopName(v){S.shop=v;document.getElementById('shopName').textContent=v;}
-function addStaff(){const n=prompt('スタッフ名:');if(n?.trim()){S.staff.push(n.trim());renderSettings();notify('スタッフを追加しました');}}
-function removeStaff(i){if(confirm(`「${S.staff[i]}」を削除しますか？`)){S.staff.splice(i,1);renderSettings();notify('スタッフを削除しました');}}
+function updateShopName(v){S.shop=v;document.getElementById('shopName').textContent=v;saveState();}
+function addStaff(){const n=prompt('スタッフ名:');if(n?.trim()){S.staff.push(n.trim());renderSettings();notify('スタッフを追加しました');saveState();}}
+function removeStaff(i){if(confirm(`「${S.staff[i]}」を削除しますか？`)){S.staff.splice(i,1);renderSettings();notify('スタッフを削除しました');saveState();}}
+function resetAllData(){
+  if(confirm('⚠️ 全データ（予約・顧客・メニュー）を初期化しますか？\nこの操作は元に戻せません。')){
+    localStorage.removeItem(LS_KEY);
+    notify('データを初期化しました。ページを再読み込みします...');
+    setTimeout(()=>location.reload(),1500);
+  }
+}
 function copyGasCode(){navigator.clipboard.writeText(document.getElementById('gasCode').textContent).then(()=>notify('コードをコピーしました'));}
 
 // =============================================
