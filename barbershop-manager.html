@@ -1420,9 +1420,15 @@ function notify(msg,type='success'){
 function setBottomNav(el){
   document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
   if(el) el.classList.add('active');
-  // 予約ページ以外ではFABを非表示
+  // FAB制御はスマホ幅のときだけ行う
   const fab=document.getElementById('fabBtn');
-  if(fab) fab.style.display=el?.id==='bn-reservation'?'':'none';
+  if(fab){
+    if(window.innerWidth<=600){
+      fab.style.display=el?.id==='bn-reservation'?'flex':'none';
+    } else {
+      fab.style.display='none';
+    }
+  }
 }
 
 // showPageにボトムナビ連動を追加
