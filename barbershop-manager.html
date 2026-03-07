@@ -302,28 +302,112 @@ tr:hover td{background:rgba(200,169,110,.03);}
     </div>
     <div class="settings-sec">
       <div class="settings-title">📊 Googleスプレッドシート連携</div>
-      <div class="form-row"><label class="form-label">GAS WebアプリURL</label><input class="form-input" id="gasUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
-      <div class="gas-code" id="gasCode">// Google Apps Script サンプルコード
-function doPost(e){
-  const ss=SpreadsheetApp.openById('YOUR_SHEET_ID');
-  const d=JSON.parse(e.postData.contents);
-  const tab=ss.getSheetByName(d.sheet)||ss.insertSheet(d.sheet);
-  if(d.action==='append') tab.appendRow(d.row);
-  if(d.action==='update'){
-    const rows=tab.getDataRange().getValues();
-    for(let i=1;i<rows.length;i++){
-      if(rows[i][0]==d.id){tab.getRange(i+1,1,1,d.row.length).setValues([d.row]);break;}
+
+      <!-- 接続状態バナー -->
+      <div id="gasStatusBanner" style="display:none;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:10px"></div>
+
+      <div class="form-row">
+        <label class="form-label">GAS WebアプリURL</label>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" id="gasUrl" placeholder="https://script.google.com/macros/s/.../exec" oninput="onGasUrlChange()">
+          <button class="btn btn-secondary" style="white-space:nowrap" onclick="testGasConnection()">🔌 接続テスト</button>
+        </div>
+      </div>
+
+      <!-- 同期オプション -->
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">同期する項目</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text2)">
+            <input type="checkbox" id="sync_reservations" checked style="accent-color:var(--accent);width:16px;height:16px"> 予約データ（reservationsシート）
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text2)">
+            <input type="checkbox" id="sync_customers" checked style="accent-color:var(--accent);width:16px;height:16px"> 顧客データ（customersシート）
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text2)">
+            <input type="checkbox" id="sync_menus" style="accent-color:var(--accent);width:16px;height:16px"> メニューデータ（menusシート）
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <button class="btn btn-primary" onclick="syncAllToSheet()">🔄 今すぐ全データを同期</button>
+        <button class="btn btn-secondary" onclick="saveGasUrl()">💾 URL を保存</button>
+      </div>
+
+      <!-- 同期ログ -->
+      <div id="syncLog" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;max-height:140px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3)"></div>
+
+      <!-- GASコード -->
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">▼ Google Apps Script にコピペするコード</div>
+      <div class="gas-code" id="gasCode">// BarberPro – Google Apps Script
+// SpreadsheetのIDを YOUR_SHEET_ID に置き換えてください
+const SHEET_ID = 'YOUR_SHEET_ID';
+
+function doPost(e) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const d  = JSON.parse(e.postData.contents);
+    const tab = ss.getSheetByName(d.sheet) || ss.insertSheet(d.sheet);
+
+    if (d.action === 'init') {
+      // ヘッダー行をセット（なければ）
+      if (tab.getLastRow() === 0) tab.appendRow(d.headers);
+      return ok();
     }
+    if (d.action === 'append') {
+      tab.appendRow(d.row);
+      return ok();
+    }
+    if (d.action === 'update') {
+      const rows = tab.getDataRange().getValues();
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(d.id)) {
+          tab.getRange(i + 1, 1, 1, d.row.length).setValues([d.row]);
+          return ok();
+        }
+      }
+      tab.appendRow(d.row); // 見つからなければ追加
+      return ok();
+    }
+    if (d.action === 'delete') {
+      const rows = tab.getDataRange().getValues();
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(d.id)) {
+          tab.deleteRow(i + 1);
+          return ok();
+        }
+      }
+      return ok();
+    }
+    if (d.action === 'bulkWrite') {
+      tab.clearContents();
+      tab.appendRow(d.headers);
+      if (d.rows.length) tab.getRange(2, 1, d.rows.length, d.rows[0].length).setValues(d.rows);
+      return ok();
+    }
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status:'error',message:err.message}))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  return ContentService.createTextOutput(JSON.stringify({status:'ok'}))
-    .setMimeType(ContentService.MimeType.JSON);
 }
-function doGet(e){
-  const ss=SpreadsheetApp.openById('YOUR_SHEET_ID');
-  const tab=ss.getSheetByName(e.parameter.sheet);
-  if(!tab) return ContentService.createTextOutput('[]');
-  const rows=tab.getDataRange().getValues();
-  return ContentService.createTextOutput(JSON.stringify(rows))
+
+function doGet(e) {
+  try {
+    const ss  = SpreadsheetApp.openById(SHEET_ID);
+    if (e.parameter.ping) return ok(); // 接続テスト用
+    const tab = ss.getSheetByName(e.parameter.sheet);
+    if (!tab) return ContentService.createTextOutput('[]').setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify(tab.getDataRange().getValues()))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status:'error',message:err.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function ok() {
+  return ContentService.createTextOutput(JSON.stringify({status:'ok'}))
     .setMimeType(ContentService.MimeType.JSON);
 }</div>
       <button class="btn btn-secondary" onclick="copyGasCode()">📋 コードをコピー</button>
@@ -614,15 +698,26 @@ function saveReservation(){
     S.customers.push({id:custId,name,kana:'',phone,email:'',birth:'',staff:document.getElementById('r_staff').value,notes:'',createdAt:new Date().toISOString()});
   }
   const rec={id:eid||'r'+Date.now(),custId,name,date,time,slot,menu:mName,price:menu.price,duration:menu.time,staff:document.getElementById('r_staff').value,phone,memo:document.getElementById('r_memo').value,colorIdx:Math.floor(Math.random()*5)};
-  if(eid){const i=S.reservations.findIndex(r=>r.id===eid);if(i>=0)S.reservations[i]=rec;notify('予約を更新しました');}
-  else{S.reservations.push(rec);notify(`${name} 様 枠${slot===0?'A':'B'} 予約を追加しました`);}
+  if(eid){
+    const i=S.reservations.findIndex(r=>r.id===eid);
+    if(i>=0)S.reservations[i]=rec;
+    notify('予約を更新しました');
+    syncReservation('update',rec);
+  } else {
+    S.reservations.push(rec);
+    notify(`${name} 様 枠${slot===0?'A':'B'} 予約を追加しました`);
+    syncReservation('append',rec);
+  }
   closeModal('resModal');renderCalendar();
 }
 function showResDetail(id,e){
   e&&e.stopPropagation();
   const r=S.reservations.find(x=>x.id===id);if(!r)return;
   if(confirm(`【${r.name} 様】\n${r.date} ${r.time} 枠${r.slot===0?'A':'B'}\nメニュー: ${r.menu}\n料金: ¥${r.price.toLocaleString()}\n担当: ${r.staff}\n\n削除しますか？`)){
-    S.reservations=S.reservations.filter(x=>x.id!==id);renderCalendar();notify('予約を削除しました');
+    S.reservations=S.reservations.filter(x=>x.id!==id);
+    renderCalendar();
+    notify('予約を削除しました');
+    syncDeleteReservation(id);
   }
 }
 
@@ -734,14 +829,27 @@ function saveCustomer(){
   if(!name){notify('氏名を入力してください','error');return;}
   const data={name,kana:document.getElementById('c_kana').value,phone:document.getElementById('c_phone').value,email:document.getElementById('c_email').value,birth:document.getElementById('c_birth').value,staff:document.getElementById('c_staff').value,notes:document.getElementById('c_notes').value};
   const eid=document.getElementById('c_eid').value;
-  if(eid){const i=S.customers.findIndex(c=>c.id===eid);if(i>=0)S.customers[i]={...S.customers[i],...data};notify('顧客情報を更新しました');}
-  else{S.customers.push({id:'c'+Date.now(),...data,createdAt:new Date().toISOString()});notify(`${name} 様を顧客台帳に追加しました`);}
+  if(eid){
+    const i=S.customers.findIndex(c=>c.id===eid);
+    if(i>=0)S.customers[i]={...S.customers[i],...data};
+    notify('顧客情報を更新しました');
+    syncCustomer('update',S.customers.find(c=>c.id===eid));
+  } else {
+    const newCust={id:'c'+Date.now(),...data,createdAt:new Date().toISOString()};
+    S.customers.push(newCust);
+    notify(`${name} 様を顧客台帳に追加しました`);
+    syncCustomer('append',newCust);
+  }
   closeModal('custModal');renderCustomers();
 }
 function delCust(id){
   const c=S.customers.find(x=>x.id===id);
-  if(confirm(`「${c?.name}」を削除しますか？`)){S.customers=S.customers.filter(x=>x.id!==id);closePanel();renderCustomers();notify('顧客を削除しました');}
-}
+  if(confirm(`「${c?.name}」を削除しますか？`)){
+    S.customers=S.customers.filter(x=>x.id!==id);
+    closePanel();renderCustomers();
+    notify('顧客を削除しました');
+    syncDeleteCustomer(id);
+  }}
 
 // === SALES ===
 function renderSales(){
@@ -813,8 +921,8 @@ function renderMenus(){
       </div>
     </div>`).join('');
 }
-function toggleMenu(i){S.menus[i].active=!S.menus[i].active;renderMenus();}
-function delMenu(i){if(confirm(`「${S.menus[i].name}」を削除しますか？`)){S.menus.splice(i,1);renderMenus();notify('メニューを削除しました');}}
+function toggleMenu(i){S.menus[i].active=!S.menus[i].active;renderMenus();syncMenu();}
+function delMenu(i){if(confirm(`「${S.menus[i].name}」を削除しますか？`)){S.menus.splice(i,1);renderMenus();notify('メニューを削除しました');syncMenu();}}
 function openMenuModal(idx){
   document.getElementById('menuModalTitle').textContent=idx!=null?'✂ メニューの編集':'✂ メニューの追加';
   document.getElementById('m_eid').value=idx!=null?idx:'';
@@ -831,11 +939,18 @@ function saveMenu(){
   if(eid!==''){S.menus[parseInt(eid)]={...d,active:S.menus[parseInt(eid)].active};notify('メニューを更新しました');}
   else{S.menus.push({...d,active:true});notify('メニューを追加しました');}
   closeModal('menuModal');renderMenus();
+  syncMenu();
 }
 
 // === SETTINGS ===
 function renderSettings(){
   document.getElementById('settingShopName').value=S.shop;
+  // GAS URLを復元
+  const saved=localStorage.getItem('gasUrl');
+  if(saved){
+    document.getElementById('gasUrl').value=saved;
+    updateGasStatus('ok');
+  }
   document.getElementById('staffList').innerHTML=S.staff.map((s,i)=>`
     <div class="srow">
       <div style="font-size:14px;color:var(--text2)">${s}</div>
@@ -847,6 +962,159 @@ function addStaff(){const n=prompt('スタッフ名:');if(n?.trim()){S.staff.pus
 function removeStaff(i){if(confirm(`「${S.staff[i]}」を削除しますか？`)){S.staff.splice(i,1);renderSettings();notify('スタッフを削除しました');}}
 function copyGasCode(){navigator.clipboard.writeText(document.getElementById('gasCode').textContent).then(()=>notify('コードをコピーしました'));}
 
+// =============================================
+// === GOOGLE SHEETS 連携 =====================
+// =============================================
+
+// URL取得（localStorage に保存）
+function getGasUrl(){
+  return document.getElementById('gasUrl')?.value.trim() || localStorage.getItem('gasUrl') || '';
+}
+function saveGasUrl(){
+  const url=document.getElementById('gasUrl').value.trim();
+  localStorage.setItem('gasUrl',url);
+  notify('URLを保存しました');
+}
+function onGasUrlChange(){
+  const url=document.getElementById('gasUrl').value.trim();
+  if(url) localStorage.setItem('gasUrl',url);
+  updateGasStatus('idle');
+}
+
+// 起動時にURLを復元
+(function restoreGasUrl(){
+  const saved=localStorage.getItem('gasUrl');
+  if(saved){const el=document.getElementById('gasUrl');if(el)el.value=saved;}
+})();
+
+// 接続テスト
+async function testGasConnection(){
+  const url=getGasUrl();
+  if(!url){notify('まずURLを入力してください','error');return;}
+  updateGasStatus('testing');
+  addSyncLog('🔌 接続テスト中...');
+  try{
+    const res=await fetch(url+'?ping=1',{mode:'no-cors'});
+    // no-corsでは成功/失敗が区別できないが到達確認はできる
+    updateGasStatus('ok');
+    addSyncLog('✅ GAS に到達できました（no-corsモード）');
+    notify('GASへの接続を確認しました');
+  }catch(err){
+    updateGasStatus('error');
+    addSyncLog('❌ 接続失敗: '+err.message);
+    notify('接続に失敗しました。URLを確認してください','error');
+  }
+}
+
+function updateGasStatus(state){
+  const el=document.getElementById('gasStatusBanner');
+  if(!el)return;
+  const map={
+    idle:{display:'none',bg:'',msg:''},
+    testing:{display:'flex',bg:'rgba(90,158,232,.12)',border:'rgba(90,158,232,.3)',color:'#5a9ee8',msg:'🔌 接続テスト中...'},
+    ok:{display:'flex',bg:'rgba(94,200,122,.12)',border:'rgba(94,200,122,.3)',color:'#5ec87a',msg:'✅ スプレッドシートと連携中'},
+    error:{display:'flex',bg:'rgba(224,85,85,.12)',border:'rgba(224,85,85,.3)',color:'#e05555',msg:'❌ 接続エラー – URLを確認してください'},
+  };
+  const s=map[state]||map.idle;
+  el.style.display=s.display;
+  if(s.display!=='none'){
+    el.style.background=s.bg;
+    el.style.border='1px solid '+s.border;
+    el.style.color=s.color;
+    el.textContent=s.msg;
+  }
+}
+
+function addSyncLog(msg){
+  const log=document.getElementById('syncLog');
+  if(!log)return;
+  log.style.display='block';
+  const line=document.createElement('div');
+  const now=new Date();
+  line.textContent=`[${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}] ${msg}`;
+  log.appendChild(line);
+  log.scrollTop=log.scrollHeight;
+}
+
+// 汎用 GAS 送信
+async function gasPost(payload){
+  const url=getGasUrl();
+  if(!url)return;
+  try{
+    await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  }catch(err){
+    addSyncLog('⚠ 送信エラー: '+err.message);
+  }
+}
+
+// ヘッダー定義
+const GAS_HEADERS={
+  reservations:['ID','顧客ID','顧客名','日付','時刻','枠','メニュー','料金','所要時間','担当スタッフ','電話','メモ','登録日時'],
+  customers:['ID','氏名','ふりがな','電話番号','メールアドレス','生年月日','担当スタッフ','メモ','登録日時'],
+  menus:['メニュー名','カテゴリ','料金','所要時間','説明','販売状態'],
+};
+
+function resRow(r){return[r.id,r.custId||'',r.name,r.date,r.time,r.slot===0?'枠A':'枠B',r.menu,r.price,r.duration,r.staff,r.phone||'',r.memo||'',new Date().toISOString()];}
+function custRow(c){return[c.id,c.name,c.kana||'',c.phone||'',c.email||'',c.birth||'',c.staff||'',c.notes||'',c.createdAt||''];}
+function menuRow(m){return[m.name,m.cat,m.price,m.time,m.desc||'',m.active?'販売中':'停止中'];}
+
+// 予約送信
+async function syncReservation(action,rec){
+  if(!document.getElementById('sync_reservations')?.checked)return;
+  addSyncLog(`📅 予約 ${action}: ${rec.name} ${rec.date}`);
+  await gasPost({sheet:'reservations',action,id:rec.id,row:resRow(rec),headers:GAS_HEADERS.reservations});
+}
+async function syncDeleteReservation(id){
+  if(!document.getElementById('sync_reservations')?.checked)return;
+  addSyncLog(`🗑 予約削除: ${id}`);
+  await gasPost({sheet:'reservations',action:'delete',id});
+}
+
+// 顧客送信
+async function syncCustomer(action,rec){
+  if(!document.getElementById('sync_customers')?.checked)return;
+  addSyncLog(`👤 顧客 ${action}: ${rec.name}`);
+  await gasPost({sheet:'customers',action,id:rec.id,row:custRow(rec),headers:GAS_HEADERS.customers});
+}
+async function syncDeleteCustomer(id){
+  if(!document.getElementById('sync_customers')?.checked)return;
+  addSyncLog(`🗑 顧客削除: ${id}`);
+  await gasPost({sheet:'customers',action:'delete',id});
+}
+
+// メニュー送信
+async function syncMenu(){
+  if(!document.getElementById('sync_menus')?.checked)return;
+  addSyncLog('✂ メニュー一括更新');
+  await gasPost({sheet:'menus',action:'bulkWrite',headers:GAS_HEADERS.menus,rows:S.menus.map(menuRow)});
+}
+
+// 全データ一括同期
+async function syncAllToSheet(){
+  const url=getGasUrl();
+  if(!url){notify('URLを入力してください','error');return;}
+  notify('同期中...');
+  addSyncLog('===== 全データ同期開始 =====');
+  updateGasStatus('testing');
+
+  if(document.getElementById('sync_reservations')?.checked){
+    addSyncLog(`📅 予約 ${S.reservations.length}件 を送信中...`);
+    await gasPost({sheet:'reservations',action:'bulkWrite',headers:GAS_HEADERS.reservations,rows:S.reservations.map(resRow)});
+  }
+  if(document.getElementById('sync_customers')?.checked){
+    addSyncLog(`👤 顧客 ${S.customers.length}件 を送信中...`);
+    await gasPost({sheet:'customers',action:'bulkWrite',headers:GAS_HEADERS.customers,rows:S.customers.map(custRow)});
+  }
+  if(document.getElementById('sync_menus')?.checked){
+    addSyncLog(`✂ メニュー ${S.menus.length}件 を送信中...`);
+    await gasPost({sheet:'menus',action:'bulkWrite',headers:GAS_HEADERS.menus,rows:S.menus.map(menuRow)});
+  }
+  addSyncLog('===== 同期完了 =====');
+  updateGasStatus('ok');
+  notify('スプレッドシートへの同期が完了しました ✅');
+}
+
+// =============================================
 // === NOTIFY ===
 function notify(msg,type='success'){
   const el=document.getElementById('notif');
