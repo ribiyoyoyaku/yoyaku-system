@@ -25,20 +25,24 @@
     const { useState, useEffect, useCallback } = React;
 
     // ========== GOOGLE SHEETS SYNC ==========
+    // Apps ScriptへはGETパラメータで送信する（最も確実な方法）
     async function syncToSheets(action, data) {
       const apiUrl = localStorage.getItem("gs_api_key");
       if (!apiUrl || !apiUrl.startsWith("http")) return { ok: false, error: "URL未設定" };
       try {
-        const payload = { action, ...data };
-        // Apps Script requires no-cors or a proper CORS-enabled endpoint
-        // We use a form-encoded POST which Apps Script accepts more reliably
-        const res = await fetch(apiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          mode: "no-cors", // Apps Script requires this from browser
+        const params = new URLSearchParams({
+          action,
+          date: data.date || "",
+          hour: data.hour || "",
+          seat: data.seat || "",
+          customerName: data.customerName || "",
+          menuName: data.menuName || "",
+          price: data.price || 0,
+          note: data.note || "",
         });
-        // no-cors returns opaque response, so we assume success if no exception
+        const url = `${apiUrl}?${params.toString()}`;
+        // GETリクエスト + no-cors → Apps ScriptのdoGet()で受信
+        await fetch(url, { method: "GET", mode: "no-cors" });
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e.message };
@@ -137,40 +141,42 @@
 
       const scriptCode = `// ================================
 // Barber Manager - Apps Script
+// スプレッドシートに貼り付けて保存後、
+// 「デプロイ」→「新しいデプロイ」
+// 種類：ウェブアプリ
+// アクセス：全員
 // ================================
-const SHEET_NAME = "予約データ";
+const SHEET_NAME = "Sheet1";
 
-function doPost(e) {
+function doGet(e) {
   try {
-    const d = JSON.parse(e.postData.contents);
+    const p = e.parameter;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // シートがなければ作成
+
+    // シートがなければ自動作成
     let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_NAME);
-      // ヘッダー行を追加
       sheet.appendRow(["日付","時間","席","顧客名","メニュー","金額","メモ","登録日時"]);
       sheet.getRange(1,1,1,8).setFontWeight("bold");
+      sheet.setFrozenRows(1);
     }
-    
-    if (d.action === "test" || d.action === "add" || d.action === "edit") {
-      sheet.appendRow([
-        d.date,
-        d.hour + ":00",
-        "席" + d.seat,
-        d.customerName || "",
-        d.menuName || "",
-        d.price || 0,
-        d.note || "",
-        new Date().toLocaleString("ja-JP")
-      ]);
-    }
-    
+
+    sheet.appendRow([
+      p.date        || "",
+      (p.hour || "") + ":00",
+      "席" + (p.seat || ""),
+      p.customerName || "",
+      p.menuName     || "",
+      Number(p.price) || 0,
+      p.note         || "",
+      new Date().toLocaleString("ja-JP")
+    ]);
+
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true }))
       .setMimeType(ContentService.MimeType.JSON);
-      
+
   } catch(err) {
     return ContentService
       .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
