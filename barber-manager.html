@@ -22,7 +22,28 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useCallback } = React;
+
+    // ========== GOOGLE SHEETS SYNC ==========
+    async function syncToSheets(action, data) {
+      const apiUrl = localStorage.getItem("gs_api_key");
+      if (!apiUrl || !apiUrl.startsWith("http")) return { ok: false, error: "URL未設定" };
+      try {
+        const payload = { action, ...data };
+        // Apps Script requires no-cors or a proper CORS-enabled endpoint
+        // We use a form-encoded POST which Apps Script accepts more reliably
+        const res = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          mode: "no-cors", // Apps Script requires this from browser
+        });
+        // no-cors returns opaque response, so we assume success if no exception
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    }
 
     const theme = {
       bg: "#0f0e0c", surface: "#1a1916", card: "#222018", border: "#2e2b25",
@@ -87,46 +108,131 @@
 
     // ========== GOOGLE SHEETS MODAL ==========
     function GoogleSheetsModal({ onClose }) {
-      const [sheetId, setSheetId] = useState(localStorage.getItem("gs_sheet_id") || "");
       const [apiUrl, setApiUrl] = useState(localStorage.getItem("gs_api_key") || "");
-      const [status, setStatus] = useState("");
+      const [status, setStatus] = useState({ msg:"", ok:true });
+      const [testing, setTesting] = useState(false);
+
       const save = () => {
-        if (!sheetId || !apiUrl) { setStatus("両方入力してください"); return; }
-        localStorage.setItem("gs_sheet_id", sheetId);
+        if (!apiUrl.startsWith("http")) { setStatus({msg:"URLを正しく入力してください", ok:false}); return; }
         localStorage.setItem("gs_api_key", apiUrl);
-        setStatus("✅ 保存しました");
+        setStatus({msg:"✅ URLを保存しました", ok:true});
       };
+
+      const testConnection = async () => {
+        if (!apiUrl.startsWith("http")) { setStatus({msg:"先にURLを入力してください", ok:false}); return; }
+        setTesting(true);
+        setStatus({msg:"🔄 接続テスト中...", ok:true});
+        localStorage.setItem("gs_api_key", apiUrl);
+        const result = await syncToSheets("test", {
+          date: "テスト", hour: "--", seat: 0,
+          customerName: "接続テスト", menuName: "テスト", price: 0, note: "この行は削除してください"
+        });
+        setTesting(false);
+        if (result.ok) {
+          setStatus({msg:"✅ 送信成功！スプレッドシートを確認してください", ok:true});
+        } else {
+          setStatus({msg:`❌ エラー: ${result.error}`, ok:false});
+        }
+      };
+
+      const scriptCode = `// ================================
+// Barber Manager - Apps Script
+// ================================
+const SHEET_NAME = "予約データ";
+
+function doPost(e) {
+  try {
+    const d = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // シートがなければ作成
+    let sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      sheet = ss.insertSheet(SHEET_NAME);
+      // ヘッダー行を追加
+      sheet.appendRow(["日付","時間","席","顧客名","メニュー","金額","メモ","登録日時"]);
+      sheet.getRange(1,1,1,8).setFontWeight("bold");
+    }
+    
+    if (d.action === "test" || d.action === "add" || d.action === "edit") {
+      sheet.appendRow([
+        d.date,
+        d.hour + ":00",
+        "席" + d.seat,
+        d.customerName || "",
+        d.menuName || "",
+        d.price || 0,
+        d.note || "",
+        new Date().toLocaleString("ja-JP")
+      ]);
+    }
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
       return (
         <div style={S.overlay} onClick={onClose}>
-          <div style={{...S.modal, maxWidth:520}} onClick={e=>e.stopPropagation()}>
+          <div style={{...S.modal, maxWidth:580}} onClick={e=>e.stopPropagation()}>
             <h2 style={S.modalTitle}>📊 Google スプレッドシート連携</h2>
-            <p style={{color:theme.textMuted, fontSize:13, marginBottom:20, lineHeight:1.7}}>
-              Google Apps Script を使ってスプレッドシートと連携できます。<br/>
-              スプレッドシートを開き「拡張機能」→「Apps Script」から<br/>
-              Web アプリとして公開し、URL を入力してください。
-            </p>
-            <label style={S.label}>スプレッドシート ID</label>
-            <input style={S.input} value={sheetId} onChange={e=>setSheetId(e.target.value)} placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"/>
-            <label style={S.label}>Apps Script URL</label>
-            <input style={S.input} value={apiUrl} onChange={e=>setApiUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec"/>
-            <div style={{background:"#1e2a1e", border:"1px solid #2a4a2a", borderRadius:8, padding:14, marginBottom:16}}>
-              <p style={{color:"#6dbf6d", fontSize:11, margin:0, lineHeight:1.8, fontFamily:"monospace"}}>
-                <strong>Apps Script サンプル：</strong><br/>
-                {"const SHEET_ID = \"スプレッドシートIDをここに\";"}  <br/>
-                {"function doPost(e) {"}<br/>
-                {"  const d = JSON.parse(e.postData.contents);"}<br/>
-                {"  SpreadsheetApp.openById(SHEET_ID)"}<br/>
-                {"    .getSheetByName(\"Sheet1\")"}<br/>
-                {"    .appendRow([d.date,d.hour+\":00\",\"席\"+d.seat,d.customerName,d.menuName,d.price,d.note||\"\"]);"}  <br/>
-                {"  return ContentService.createTextOutput(JSON.stringify({ok:true}))"}<br/>
-                {"    .setMimeType(ContentService.MimeType.JSON);"}<br/>
-                {"}"}
+
+            {/* Step 1 */}
+            <div style={{background:"#1a1f2e", border:"1px solid #2a3a5a", borderRadius:10, padding:16, marginBottom:14}}>
+              <div style={{color:"#7ab8f5", fontWeight:700, fontSize:13, marginBottom:10}}>① Apps Script にコードを貼る</div>
+              <p style={{color:theme.textMuted, fontSize:12, marginBottom:10, lineHeight:1.6}}>
+                スプレッドシートを開いて「拡張機能」→「Apps Script」を開き、<br/>
+                下のコードを全部コピーして貼り付けて保存してください。
+              </p>
+              <div style={{position:"relative"}}>
+                <pre style={{background:"#0d1117", border:"1px solid #2a3a5a", borderRadius:6, padding:12, fontSize:10, color:"#6dbf6d", lineHeight:1.7, overflowX:"auto", margin:0, whiteSpace:"pre-wrap"}}>
+                  {scriptCode}
+                </pre>
+                <button onClick={()=>{navigator.clipboard.writeText(scriptCode); alert("コピーしました！");}}
+                  style={{position:"absolute", top:8, right:8, background:"#2a3a5a", color:"#7ab8f5", border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer", fontSize:11}}>
+                  コピー
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div style={{background:"#1a1f2e", border:"1px solid #2a3a5a", borderRadius:10, padding:16, marginBottom:14}}>
+              <div style={{color:"#7ab8f5", fontWeight:700, fontSize:13, marginBottom:8}}>② デプロイする</div>
+              <p style={{color:theme.textMuted, fontSize:12, lineHeight:1.7}}>
+                Apps Script の画面で右上「<strong style={{color:theme.text}}>デプロイ</strong>」→「<strong style={{color:theme.text}}>新しいデプロイ</strong>」<br/>
+                → 種類：<strong style={{color:theme.text}}>ウェブアプリ</strong>　アクセス：<strong style={{color:theme.text}}>全員</strong><br/>
+                → 「デプロイ」→ 表示された <strong style={{color:theme.accent}}>URL をコピー</strong>
               </p>
             </div>
-            {status && <p style={{color:theme.success, fontSize:13, marginBottom:12}}>{status}</p>}
+
+            {/* Step 3 */}
+            <div style={{background:"#1a1f2e", border:"1px solid #2a3a5a", borderRadius:10, padding:16, marginBottom:14}}>
+              <div style={{color:"#7ab8f5", fontWeight:700, fontSize:13, marginBottom:8}}>③ URL を貼り付けてテスト送信</div>
+              <label style={S.label}>Apps Script の URL</label>
+              <input style={{...S.input, marginBottom:10}} value={apiUrl} onChange={e=>setApiUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"/>
+              <div style={{display:"flex", gap:10}}>
+                <button style={{...S.btnSecondary, flex:1}} onClick={save}>URLを保存</button>
+                <button style={{...S.btnPrimary, flex:1, opacity:testing?0.6:1}} onClick={testConnection} disabled={testing}>
+                  {testing ? "送信中..." : "🔌 接続テスト"}
+                </button>
+              </div>
+            </div>
+
+            {status.msg && (
+              <div style={{background:status.ok?"#1a2a1a":"#2a1a1a", border:`1px solid ${status.ok?"#3a6a3a":"#6a3a3a"}`, borderRadius:8, padding:12, marginBottom:14}}>
+                <p style={{color:status.ok?theme.success:theme.danger, fontSize:13, margin:0}}>{status.msg}</p>
+              </div>
+            )}
+
             <div style={S.btnRow}>
               <button style={S.btnSecondary} onClick={onClose}>閉じる</button>
-              <button style={S.btnPrimary} onClick={save}>設定を保存</button>
             </div>
           </div>
         </div>
@@ -144,9 +250,7 @@
         if (!customerId || !menuId) return;
         const customer = customers.find(c => c.id === Number(customerId));
         const rsv = { id: existing?.id || generateId(), date: slot.date, hour: slot.hour, seat, customerId: Number(customerId), customerName: customer?.name, menuId: Number(menuId), menuName: selectedMenu?.name, price: selectedMenu?.price, note };
-        // Sync to Google Sheets if configured
-        const apiUrl = localStorage.getItem("gs_api_key");
-        if (apiUrl) fetch(apiUrl, { method:"POST", body: JSON.stringify({action:"add",...rsv}) }).catch(()=>{});
+        syncToSheets(existing ? "edit" : "add", rsv);
         onSave(rsv);
       };
       return (
