@@ -1646,12 +1646,8 @@ if (sidebarShopNameEl) sidebarShopNameEl.textContent = SHOP_CONFIG.name;
 // ─── GASへの書き込みリクエスト（no-cors不使用・成否を確認できる） ───
 async function gasPost(data) {
   const json = JSON.stringify(data);
-
-  // 日本語を含むJSONを安全にBase64エンコード
-  // encodeURIComponent → unescape → btoa の順でUnicode対応
-  const b64 = btoa(unescape(encodeURIComponent(json)));
-  const url = `${SHEET_URL}?data=${encodeURIComponent(b64)}`;
-
+  // JSONをそのままURIエンコードしてGETパラメータで送る（Base64不使用・最も確実）
+  const url    = `${SHEET_URL}?payload=${encodeURIComponent(json)}`;
   const res    = await fetch(url);
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'GASエラー');
