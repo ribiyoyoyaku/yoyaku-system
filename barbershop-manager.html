@@ -332,6 +332,7 @@ tr:hover td{background:rgba(200,169,110,.03);}
 
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <button class="btn btn-primary" onclick="syncAllToSheet()">🔄 今すぐ全データを同期</button>
+        <button class="btn btn-secondary" onclick="loadFromSheet()">⬇️ GASから読み込む</button>
         <button class="btn btn-secondary" onclick="saveGasUrl()">💾 URL を保存</button>
       </div>
 
@@ -416,8 +417,18 @@ function ok() {
       <div class="settings-title">🗄️ データ管理</div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.8">
         データはこのブラウザの <strong style="color:var(--accent)">localStorage</strong> に自動保存されています。<br>
-        ページを閉じたり更新しても消えません。
+        ページを閉じたり更新しても消えません。6ヶ月以上前の予約は自動でアーカイブされます。
       </div>
+
+      <!-- ストレージ使用量メーター -->
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">ストレージ使用量</div>
+        <div style="background:var(--border);border-radius:4px;height:8px;overflow:hidden;margin-bottom:6px">
+          <div id="storageBar" style="height:100%;background:var(--green);border-radius:4px;transition:width .4s,background .4s;width:0%"></div>
+        </div>
+        <div id="storageTxt" style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono'">計算中...</div>
+      </div>
+
       <div style="background:rgba(224,85,85,.08);border:1px solid rgba(224,85,85,.2);border-radius:8px;padding:16px">
         <div style="font-size:13px;color:var(--red);font-weight:600;margin-bottom:8px">⚠️ データの初期化</div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:12px">全ての予約・顧客・メニューデータを削除してリセットします。この操作は元に戻せません。</div>
@@ -558,15 +569,46 @@ function loadState(){
 // localStorageへ保存（date/viewは保存しない）
 function saveState(){
   try{
+    // 容量対策: 6ヶ月以上前の予約はアーカイブキーに分離して本体を軽くする
+    const cutoff=new Date();
+    cutoff.setMonth(cutoff.getMonth()-6);
+    const cutoffStr=fd(cutoff);
+    const activeRes=S.reservations.filter(r=>r.date>=cutoffStr);
+    const archiveRes=S.reservations.filter(r=>r.date<cutoffStr);
+    if(archiveRes.length){
+      try{localStorage.setItem(LS_KEY+'_archive',JSON.stringify(archiveRes));}catch(e){}
+    }
     const toSave={
       menus:S.menus,
       staff:S.staff,
       customers:S.customers,
-      reservations:S.reservations,
+      reservations:activeRes,
       shop:S.shop,
     };
     localStorage.setItem(LS_KEY,JSON.stringify(toSave));
-  }catch(e){console.warn('localStorage保存失敗',e);}
+    checkStorageUsage();
+  }catch(e){
+    if(e.name==='QuotaExceededError'){
+      alert('⚠️ ブラウザの保存容量が上限に達しました。\n設定画面から「全データをGASに同期」してバックアップ後、古いデータを整理してください。');
+    }
+    console.warn('localStorage保存失敗',e);
+  }
+}
+
+// 容量使用率を計算して警告
+function checkStorageUsage(){
+  try{
+    const used=new Blob(Object.values(localStorage)).size;
+    const limit=5*1024*1024;
+    const pct=Math.round(used/limit*100);
+    const el=document.getElementById('storageBar');
+    const tx=document.getElementById('storageTxt');
+    if(!el)return;
+    el.style.width=Math.min(pct,100)+'%';
+    el.style.background=pct>80?'var(--red)':pct>60?'#e8a83a':'var(--green)';
+    tx.textContent=`${(used/1024).toFixed(0)} KB / 5,000 KB 使用中（${pct}%）`;
+    if(pct>80)notify('⚠️ ストレージ使用量が'+pct+'%です。GASへ同期してバックアップを！','error');
+  }catch(e){}
 }
 
 const _saved = loadState();
@@ -975,12 +1017,12 @@ function saveMenu(){
 // === SETTINGS ===
 function renderSettings(){
   document.getElementById('settingShopName').value=S.shop;
-  // GAS URLを復元
   const saved=localStorage.getItem('gasUrl');
   if(saved){
     document.getElementById('gasUrl').value=saved;
     updateGasStatus('ok');
   }
+  checkStorageUsage();
   document.getElementById('staffList').innerHTML=S.staff.map((s,i)=>`
     <div class="srow">
       <div style="font-size:14px;color:var(--text2)">${s}</div>
@@ -1133,7 +1175,6 @@ async function syncAllToSheet(){
   notify('同期中...');
   addSyncLog('===== 全データ同期開始 =====');
   updateGasStatus('testing');
-
   if(document.getElementById('sync_reservations')?.checked){
     addSyncLog(`📅 予約 ${S.reservations.length}件 を送信中...`);
     await gasPost({sheet:'reservations',action:'bulkWrite',headers:GAS_HEADERS.reservations,rows:S.reservations.map(resRow)});
@@ -1152,6 +1193,88 @@ async function syncAllToSheet(){
 }
 
 // =============================================
+// === GASからデータを読み込む =================
+// =============================================
+
+// GASのシートを1枚取得（行の配列を返す、1行目はヘッダー）
+async function gasFetch(sheetName){
+  const url=getGasUrl();
+  if(!url) return null;
+  try{
+    const res=await fetch(`${url}?sheet=${encodeURIComponent(sheetName)}`,{mode:'cors'});
+    const rows=await res.json();
+    return Array.isArray(rows)&&rows.length>1 ? rows.slice(1) : []; // ヘッダー行を除く
+  }catch(e){
+    addSyncLog('⚠ 読み込みエラー('+sheetName+'): '+e.message);
+    return null;
+  }
+}
+
+// スプレッドシートから全データを読み込んでアプリに反映
+async function loadFromSheet(){
+  const url=getGasUrl();
+  if(!url){notify('GAS URLが設定されていません','error');return;}
+  notify('スプレッドシートからデータを読み込み中...');
+  addSyncLog('===== GASからデータ読み込み開始 =====');
+  updateGasStatus('testing');
+  let ok=true;
+
+  // 予約
+  const resRows=await gasFetch('reservations');
+  if(resRows===null){ok=false;}
+  else if(resRows.length){
+    S.reservations=resRows.map(r=>({
+      id:String(r[0]),custId:r[1]||null,name:r[2],date:r[3],time:r[4],
+      slot:r[5]==='枠A'?0:1,menu:r[6],price:Number(r[7])||0,duration:Number(r[8])||30,
+      staff:r[9],phone:r[10]||'',memo:r[11]||'',colorIdx:Math.floor(Math.random()*5)
+    }));
+    addSyncLog(`📅 予約 ${S.reservations.length}件 を読み込みました`);
+  }
+
+  // 顧客
+  const custRows=await gasFetch('customers');
+  if(custRows===null){ok=false;}
+  else if(custRows.length){
+    S.customers=custRows.map(r=>({
+      id:String(r[0]),name:r[1],kana:r[2]||'',phone:r[3]||'',
+      email:r[4]||'',birth:r[5]||'',staff:r[6]||'',notes:r[7]||'',
+      createdAt:r[8]||new Date().toISOString()
+    }));
+    addSyncLog(`👤 顧客 ${S.customers.length}件 を読み込みました`);
+  }
+
+  // メニュー
+  const menuRows=await gasFetch('menus');
+  if(menuRows===null){ok=false;}
+  else if(menuRows.length){
+    S.menus=menuRows.map(r=>({
+      name:r[0],cat:r[1],price:Number(r[2])||0,time:Number(r[3])||30,
+      desc:r[4]||'',active:r[5]==='販売中'
+    }));
+    addSyncLog(`✂ メニュー ${S.menus.length}件 を読み込みました`);
+  }
+
+  if(ok){
+    saveState();
+    renderCalendar();
+    addSyncLog('===== 読み込み完了・localStorageを更新しました =====');
+    updateGasStatus('ok');
+    notify('スプレッドシートからデータを読み込みました ✅');
+  } else {
+    updateGasStatus('error');
+    notify('一部のデータ読み込みに失敗しました。URLとGASの設定を確認してください','error');
+  }
+}
+
+// 起動時にGASが設定済みなら自動で読み込む（バックグラウンド）
+async function autoLoadFromSheet(){
+  const url=getGasUrl();
+  if(!url) return;
+  addSyncLog('🔄 起動時の自動読み込みを開始...');
+  await loadFromSheet();
+}
+
+// =============================================
 // === NOTIFY ===
 function notify(msg,type='success'){
   const el=document.getElementById('notif');
@@ -1163,6 +1286,9 @@ function notify(msg,type='success'){
 }
 
 renderCalendar();
+checkStorageUsage();
+// GAS URLが設定済みなら起動時にバックグラウンドで自動読み込み
+setTimeout(autoLoadFromSheet, 800);
 </script>
 </body>
 </html>
