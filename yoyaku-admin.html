@@ -516,6 +516,240 @@
   .add-input option { background: var(--panel2); }
 
 
+  /* ─── Customers Page ─── */
+  .cust-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .cust-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+  }
+  .cust-search-icon {
+    position: absolute;
+    left: 13px; top: 50%;
+    transform: translateY(-50%);
+    font-size: .9rem;
+  }
+  .cust-search-wrap input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--panel);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px 10px 38px;
+    color: var(--text);
+    font-size: .9rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .cust-search-wrap input:focus { border-color: rgba(124,106,247,.6); }
+  .cust-summary {
+    font-size: .78rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .cust-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    height: calc(100vh - 230px);
+    min-height: 400px;
+  }
+  @media (max-width: 900px) {
+    .cust-layout { grid-template-columns: 1fr; height: auto; }
+    .cust-detail { min-height: 300px; }
+  }
+
+  /* 顧客リスト */
+  .cust-list {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow-y: auto;
+  }
+  .cust-list::-webkit-scrollbar { width: 4px; }
+  .cust-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .cust-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(46,51,71,.5);
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .cust-card:hover  { background: rgba(124,106,247,.06); }
+  .cust-card.active { background: rgba(124,106,247,.12); }
+  .cust-card:last-child { border-bottom: none; }
+
+  .cust-avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #a897ff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+  }
+  .cust-card-info { flex: 1; min-width: 0; }
+  .cust-card-name {
+    font-weight: 700;
+    font-size: .9rem;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cust-card-sub {
+    font-size: .72rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .cust-card-badge {
+    font-size: .65rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .cust-card-badge.new-badge {
+    background: rgba(251,191,36,.2);
+    color: var(--yellow);
+  }
+  .cust-card-badge.regular-badge {
+    background: rgba(124,106,247,.2);
+    color: var(--accent2);
+  }
+  .cust-card-badge.vip-badge {
+    background: rgba(52,211,153,.2);
+    color: var(--green);
+  }
+
+  /* 顧客詳細パネル */
+  .cust-detail {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow-y: auto;
+  }
+  .cust-detail::-webkit-scrollbar { width: 4px; }
+  .cust-detail::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .cust-detail-empty {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100%; padding: 40px;
+    text-align: center;
+  }
+  .cust-detail-header {
+    padding: 24px 24px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .cust-detail-avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #a897ff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(124,106,247,.35);
+  }
+  .cust-detail-name {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--text);
+  }
+  .cust-detail-tel {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: 3px;
+    font-family: 'DM Mono', monospace;
+  }
+  .cust-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cust-stat-box {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .cust-stat-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+  .cust-stat-lbl {
+    font-size: .68rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .cust-history-title {
+    padding: 16px 24px 10px;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .cust-history-item {
+    display: grid;
+    grid-template-columns: 90px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 24px;
+    border-top: 1px solid rgba(46,51,71,.4);
+    transition: background .15s;
+    cursor: pointer;
+  }
+  .cust-history-item:hover { background: rgba(124,106,247,.05); }
+  .cust-history-date {
+    font-family: 'DM Mono', monospace;
+    font-size: .72rem;
+    color: var(--muted);
+  }
+  .cust-history-menu {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .cust-history-staff {
+    font-size: .7rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .cust-history-price {
+    font-family: 'DM Mono', monospace;
+    font-size: .8rem;
+    color: var(--accent2);
+    font-weight: 700;
+    text-align: right;
+  }
+  .cust-history-status {
+    font-size: .65rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+    text-align: right;
+    margin-top: 3px;
+  }
+
   /* ─── Calendar Page ─── */
   .cal-page-header {
     display: flex;
@@ -637,7 +871,7 @@
   .cal-inner {
     display: flex;
     position: relative;
-    min-height: 1020px; /* 17スロット × 60px */
+    min-height: 1020px; /* 34スロット × 30px */
   }
   .cal-time-col {
     width: 56px;
@@ -666,18 +900,21 @@
   .cal-day-col {
     border-left: 1px solid var(--border);
     position: relative;
-    height: 1020px; /* cal-innerのmin-heightに合わせる */
+    height: 1020px; /* 34スロット × 30px */
     overflow: visible;
   }
   .cal-day-col.is-today { background: rgba(124,106,247,.03); }
-  .cal-hour-cell {
-    height: 60px;
-    border-bottom: 1px solid rgba(46,51,71,.4);
+  .cal-slot-cell {
+    height: 30px;
     box-sizing: border-box;
     cursor: pointer;
     transition: background .15s;
+    position: relative;
   }
-  .cal-hour-cell:hover { background: rgba(124,106,247,.07); }
+  .cal-slot-cell:hover { background: rgba(124,106,247,.07); }
+  /* 毎時00分の区切り線は濃く、30分は薄く */
+  .cal-slot-cell.is-hour  { border-top: 1px solid rgba(46,51,71,.5); }
+  .cal-slot-cell.is-half  { border-top: 1px dashed rgba(46,51,71,.2); }
 
   /* 予約ブロック */
   .cal-event {
@@ -1110,6 +1347,7 @@ function toggleAuthPw() {
     <nav>
       <div class="nav-item active" id="nav-reservations" onclick="showPage('reservations')"><span class="nav-icon">📅</span><span>予約一覧</span></div>
       <div class="nav-item" id="nav-calendar" onclick="showPage('calendar')"><span class="nav-icon">🗓</span><span>カレンダー</span></div>
+      <div class="nav-item" id="nav-customers" onclick="showPage('customers')"><span class="nav-icon">👥</span><span>顧客</span></div>
       <div class="nav-item" id="nav-sales" onclick="showPage('sales')"><span class="nav-icon">💰</span><span>売上</span></div>
       <div class="nav-item" id="nav-settings" onclick="showPage('settings')"><span class="nav-icon">⚙️</span><span>店舗設定</span></div>
     </nav>
@@ -1203,6 +1441,28 @@ function toggleAuthPw() {
           </thead>
           <tbody id="tbody"></tbody>
         </table>
+      </div>
+
+      <!-- ─── 顧客ページ ─── -->
+      <div class="settings-page" id="customersPage">
+        <!-- 検索バー -->
+        <div class="cust-search-bar">
+          <div class="cust-search-wrap">
+            <span class="cust-search-icon">🔍</span>
+            <input id="custSearchInput" type="text" placeholder="名前・電話番号で検索..." oninput="filterCustomers(this.value)" autocomplete="off"/>
+          </div>
+          <div class="cust-summary" id="custSummary"></div>
+        </div>
+        <!-- 顧客リスト + 詳細パネル -->
+        <div class="cust-layout">
+          <div class="cust-list" id="custList"></div>
+          <div class="cust-detail" id="custDetail">
+            <div class="cust-detail-empty">
+              <div style="font-size:2.5rem;margin-bottom:12px">👤</div>
+              <div style="color:var(--muted);font-size:.9rem">顧客を選択してください</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ─── カレンダーページ ─── -->
@@ -1974,6 +2234,7 @@ function showPage(page) {
   document.getElementById('settingsPage').classList.remove('active');
   document.getElementById('salesPage').classList.remove('active');
   document.getElementById('calendarPage').classList.remove('active');
+  document.getElementById('customersPage').classList.remove('active');
 
   if (page === 'reservations') {
     document.getElementById('nav-reservations').classList.add('active');
@@ -1990,6 +2251,13 @@ function showPage(page) {
     document.getElementById('calendarPage').classList.add('active');
     document.querySelector('.topbar-title').textContent = 'カレンダー';
     renderCalendarPage();
+
+  } else if (page === 'customers') {
+    document.getElementById('nav-customers').classList.add('active');
+    document.getElementById('bnav-customers').classList.add('active');
+    document.getElementById('customersPage').classList.add('active');
+    document.querySelector('.topbar-title').textContent = '顧客管理';
+    renderCustomersPage();
 
   } else if (page === 'sales') {
     document.getElementById('nav-sales').classList.add('active');
@@ -2400,20 +2668,28 @@ function renderCalendarPage() {
   }).join('');
 
   // ── 時間軸 ──
-  const HOURS = Array.from({length: 17}, (_, i) => i + 9); // 9〜25時(翌1時)
-  document.getElementById('calTimeCol').innerHTML = HOURS.map(h =>
-    `<div class="cal-time-slot-label">${h < 24 ? String(h).padStart(2,'0') : '0'+String(h-24).padStart(1,'0')}:00</div>`
-  ).join('');
+  // 30分スロット: 9:00〜翌1:00 → 34スロット
+  const SLOTS = [];
+  for (let h = 9; h < 26; h++) { SLOTS.push({h, m:0}); SLOTS.push({h, m:30}); }
+  // 最後の26:00はなし（25:30まで）
+  SLOTS.pop(); // 25:30を除く → 33スロット → ちょうど25:00で終わり
+
+  // 時間軸ラベル（毎時のみ表示）
+  document.getElementById('calTimeCol').innerHTML = SLOTS.map(({h, m}) => {
+    const label = m === 0
+      ? `${h < 24 ? String(h).padStart(2,'0') : '0'+String(h-24).padStart(1,'0')}:00`
+      : '';
+    return `<div class="cal-time-slot-label" style="height:30px;padding-top:${m===0?'4':'0'}px">${label}</div>`;
+  }).join('');
 
   // ── 日ごとのカラム ──
   const colsEl = document.getElementById('calDayCols');
   colsEl.innerHTML = days.map((d, di) => {
     const ds      = fmt(d);
     const isToday = ds === todayStr2;
-    const dayRes  = reservations.filter(r => r.date === ds && r.status !== 'cancel' || r.date === ds && r.status === 'cancel');
 
-    const cells = HOURS.map(h =>
-      `<div class="cal-hour-cell" onclick="calCellClick('${ds}',${h})" data-date="${ds}" data-hour="${h}"></div>`
+    const cells = SLOTS.map(({h, m}) =>
+      `<div class="cal-slot-cell ${m===0?'is-hour':'is-half'}" onclick="calCellClick('${ds}',${h},${m})" data-date="${ds}" data-hour="${h}" data-min="${m}"></div>`
     ).join('');
 
     return `<div class="cal-day-col${isToday ? ' is-today' : ''}" id="calCol_${ds}">${cells}</div>`;
@@ -2459,7 +2735,7 @@ function placeCalEvent(r, dateStr) {
   if (hh < 9 || hh > 25) return;
 
   const meta      = getMenuMeta(r.menu);
-  const topPx     = (hh - 9) * 60 + mm;
+  const topPx     = (hh - 9) * 60 + mm; // 1px=1分（30px=30分スロット）
   const heightPx  = Math.max(meta.durationMin, 20); // 最低20px
   const color     = meta.color;
 
@@ -2522,8 +2798,8 @@ function updateNowLine(days) {
 }
 
 // カレンダーのセルクリック → 新規予約モーダルに日時をプリセット
-function calCellClick(dateStr, hour) {
-  const timeStr = `${String(hour).padStart(2,'0')}:00`;
+function calCellClick(dateStr, hour, min=0) {
+  const timeStr = `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
   // 新規予約モーダルを開いて日時をセット
   document.getElementById('add_date').value = dateStr;
   const timeSelect = document.getElementById('add_time');
@@ -2542,6 +2818,169 @@ function refreshCalendar() {
   if (document.getElementById('calendarPage').classList.contains('active')) {
     renderCalendarPage();
   }
+}
+
+// ============================================================
+//  ─── 顧客ページ ───
+// ============================================================
+let selectedCustomerKey = null;
+
+// 予約データから顧客リストを生成（電話番号 or 名前でグループ化）
+function buildCustomers() {
+  const map = new Map();
+  reservations.forEach(r => {
+    // 電話番号があればそれをキーに、なければ名前をキーに
+    const key = r.tel && r.tel !== '0' && r.tel !== '' ? r.tel : `name:${r.name}`;
+    if (!map.has(key)) {
+      map.set(key, { key, name: r.name, tel: r.tel, email: r.email, visits: [] });
+    }
+    map.get(key).visits.push(r);
+  });
+  // 直近予約日で降順ソート
+  map.forEach(c => {
+    c.visits.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+  });
+  return Array.from(map.values()).sort((a, b) => {
+    const la = a.visits[0]?.date || '';
+    const lb = b.visits[0]?.date || '';
+    return lb.localeCompare(la);
+  });
+}
+
+function customerRank(visits) {
+  const done = visits.filter(v => v.status === 'done').length;
+  if (done >= 10) return { label: 'VIP', cls: 'vip-badge' };
+  if (done >= 3)  return { label: 'リピーター', cls: 'regular-badge' };
+  return { label: '新規', cls: 'new-badge' };
+}
+
+function renderCustomersPage(filter = '') {
+  const all = buildCustomers();
+  const customers = filter
+    ? all.filter(c =>
+        c.name.includes(filter) ||
+        (c.tel && c.tel.replace(/-/g, '').includes(filter.replace(/-/g, '')))
+      )
+    : all;
+
+  // サマリー
+  document.getElementById('custSummary').textContent =
+    `${customers.length}名 / 全${all.length}名`;
+
+  // リスト描画
+  const listEl = document.getElementById('custList');
+  if (customers.length === 0) {
+    listEl.innerHTML = `<div style="padding:30px;text-align:center;color:var(--muted);font-size:.85rem">該当する顧客が見つかりません</div>`;
+    return;
+  }
+
+  listEl.innerHTML = customers.map(c => {
+    const rank     = customerRank(c.visits);
+    const lastVisit = c.visits.find(v => v.status === 'done');
+    const lastDate = lastVisit ? lastVisit.date.replace(/-/g, '/') : '来店なし';
+    const initial  = c.name ? c.name[0] : '?';
+    const isActive = c.key === selectedCustomerKey ? 'active' : '';
+    return `<div class="cust-card ${isActive}" onclick="selectCustomer('${c.key.replace(/'/g,"\\'")}')">
+      <div class="cust-avatar">${initial}</div>
+      <div class="cust-card-info">
+        <div class="cust-card-name">${c.name}</div>
+        <div class="cust-card-sub">最終来店: ${lastDate} · ${c.visits.length}件</div>
+      </div>
+      <span class="cust-card-badge ${rank.cls}">${rank.label}</span>
+    </div>`;
+  }).join('');
+
+  // 選択中の顧客の詳細を再描画
+  if (selectedCustomerKey) {
+    const sel = all.find(c => c.key === selectedCustomerKey);
+    if (sel) renderCustomerDetail(sel);
+  }
+}
+
+function selectCustomer(key) {
+  selectedCustomerKey = key;
+  const all = buildCustomers();
+  const c = all.find(c => c.key === key);
+  if (!c) return;
+  // アクティブクラス更新
+  document.querySelectorAll('.cust-card').forEach(el => el.classList.remove('active'));
+  event?.currentTarget?.classList.add('active');
+  renderCustomerDetail(c);
+}
+
+function renderCustomerDetail(c) {
+  const detailEl = document.getElementById('custDetail');
+  const rank = customerRank(c.visits);
+  const done = c.visits.filter(v => v.status === 'done');
+  const totalSpent = done.reduce((s, v) => s + (v.price || 0), 0);
+  const avgSpent = done.length ? Math.round(totalSpent / done.length) : 0;
+
+  // よく使うメニュー
+  const menuCount = {};
+  done.forEach(v => { menuCount[v.menu] = (menuCount[v.menu] || 0) + 1; });
+  const favMenu = Object.entries(menuCount).sort((a,b) => b[1]-a[1])[0]?.[0] || '—';
+
+  // 次の予約
+  const todayStr3 = fmt(new Date());
+  const upcoming = c.visits.find(v => v.date >= todayStr3 && v.status !== 'cancel' && v.status !== 'done');
+
+  const statusColor = { new:'var(--yellow)', confirmed:'var(--accent2)', done:'var(--green)', cancel:'var(--red)' };
+  const statusLabel2 = { new:'未確認', confirmed:'確認済', done:'完了', cancel:'キャンセル' };
+
+  detailEl.innerHTML = `
+    <div class="cust-detail-header">
+      <div class="cust-detail-avatar">${c.name[0] || '?'}</div>
+      <div style="flex:1;min-width:0">
+        <div class="cust-detail-name">${c.name}
+          <span class="cust-card-badge ${rank.cls}" style="margin-left:8px;font-size:.65rem">${rank.label}</span>
+        </div>
+        <div class="cust-detail-tel">${c.tel || '電話番号なし'}</div>
+        ${c.email ? `<div style="font-size:.72rem;color:var(--muted);margin-top:2px">✉ ${c.email}</div>` : ''}
+      </div>
+      ${upcoming ? `<div style="background:rgba(124,106,247,.15);border:1px solid rgba(124,106,247,.3);border-radius:10px;padding:8px 12px;font-size:.72rem;text-align:center;flex-shrink:0">
+        <div style="color:var(--accent2);font-weight:700">次回予約</div>
+        <div style="color:var(--text);margin-top:2px">${upcoming.date.replace(/-/g,'/')} ${upcoming.time}</div>
+      </div>` : ''}
+    </div>
+
+    <div class="cust-stats-grid">
+      <div class="cust-stat-box">
+        <div class="cust-stat-val">${done.length}</div>
+        <div class="cust-stat-lbl">来店回数</div>
+      </div>
+      <div class="cust-stat-box">
+        <div class="cust-stat-val">¥${totalSpent.toLocaleString()}</div>
+        <div class="cust-stat-lbl">累計金額</div>
+      </div>
+      <div class="cust-stat-box">
+        <div class="cust-stat-val">¥${avgSpent.toLocaleString()}</div>
+        <div class="cust-stat-lbl">平均単価</div>
+      </div>
+    </div>
+
+    <div style="padding:12px 24px 8px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:.72rem;color:var(--muted)">よく使うメニュー:</span>
+      <span style="font-size:.8rem;font-weight:700;color:var(--accent2)">${favMenu}</span>
+    </div>
+
+    <div class="cust-history-title">施術履歴 (${c.visits.length}件)</div>
+    ${c.visits.map(v => `
+      <div class="cust-history-item" onclick="openModal(${v.id})">
+        <div class="cust-history-date">${v.date.replace(/-/g,'/')}<br>${v.time}</div>
+        <div>
+          <div class="cust-history-menu">${v.menu || '—'}</div>
+          <div class="cust-history-staff">${v.staff || ''} ${v.memo ? '· '+v.memo : ''}</div>
+        </div>
+        <div>
+          <div class="cust-history-price">¥${(v.price||0).toLocaleString()}</div>
+          <div class="cust-history-status" style="background:rgba(0,0,0,.15);color:${statusColor[v.status]}">${statusLabel2[v.status]||v.status}</div>
+        </div>
+      </div>`).join('')}
+  `;
+}
+
+function filterCustomers(val) {
+  renderCustomersPage(val.trim());
 }
 
 // ─── 自動リロード（3分ごと・差分取得） ───
@@ -2618,20 +3057,19 @@ loadReservations();
 <!-- ボトムナビ（スマホ専用） -->
 <nav class="bottom-nav" id="bottomNav">
   <div class="bottom-nav-item active" id="bnav-reservations" onclick="showPage('reservations')">
-    <span class="bn-icon">📅</span>
-    <span>予約一覧</span>
+    <span class="bn-icon">📅</span><span>予約</span>
   </div>
   <div class="bottom-nav-item" id="bnav-calendar" onclick="showPage('calendar')">
-    <span class="bn-icon">🗓</span>
-    <span>カレンダー</span>
+    <span class="bn-icon">🗓</span><span>カレンダー</span>
+  </div>
+  <div class="bottom-nav-item" id="bnav-customers" onclick="showPage('customers')">
+    <span class="bn-icon">👥</span><span>顧客</span>
   </div>
   <div class="bottom-nav-item" id="bnav-sales" onclick="showPage('sales')">
-    <span class="bn-icon">💰</span>
-    <span>売上</span>
+    <span class="bn-icon">💰</span><span>売上</span>
   </div>
   <div class="bottom-nav-item" id="bnav-settings" onclick="showPage('settings')">
-    <span class="bn-icon">⚙️</span>
-    <span>店舗設定</span>
+    <span class="bn-icon">⚙️</span><span>設定</span>
   </div>
 </nav>
 
